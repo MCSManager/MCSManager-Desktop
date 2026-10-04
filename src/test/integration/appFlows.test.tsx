@@ -181,6 +181,42 @@ describe("app integration flows", () => {
     });
   });
 
+  it("settings language change takes effect on save", async () => {
+    const user = userEvent.setup();
+    const mock = createMockBridge();
+    await renderReadyApp(mock);
+
+    await user.click(screen.getByRole("button", { name: en["settings.title"] }));
+    await user.selectOptions(screen.getByLabelText(en["settings.language"]), "zh");
+    await user.click(screen.getByRole("button", { name: en["settings.save"] }));
+
+    expect(screen.getByRole("button", { name: zh["settings.save"] })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: zh["settings.close"] }));
+    expect(screen.getByRole("button", { name: zh["action.startAll"] })).toBeInTheDocument();
+    expect(localStorage.getItem("mcsm-desktop.lang")).toBe("zh");
+    expect(mock.config.language).toBe("zh");
+  });
+
+  it("startup language falls back to config when nothing stored", async () => {
+    const mock = createMockBridge();
+    mock.config.language = "zh";
+    await renderReadyApp(mock);
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: zh["action.startAll"] })).toBeInTheDocument();
+    });
+    expect(localStorage.getItem("mcsm-desktop.lang")).toBeNull();
+  });
+
+  it("stored language wins over config language", async () => {
+    localStorage.setItem("mcsm-desktop.lang", "en");
+    const mock = createMockBridge();
+    mock.config.language = "zh";
+    await renderReadyApp(mock);
+
+    expect(screen.getByRole("button", { name: en["action.startAll"] })).toBeInTheDocument();
+  });
+
   it("console ring cap honored end to end", async () => {
     const mock = createMockBridge();
     await renderReadyApp(mock);

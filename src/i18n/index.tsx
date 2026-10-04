@@ -1,4 +1,12 @@
-import { createContext, useContext, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import { getConfigStore } from "../state/configStore";
 import en from "./locales/en.json";
 import zh from "./locales/zh.json";
 
@@ -65,10 +73,30 @@ export function I18nProvider({
   initialLanguage?: Language;
 }) {
   const [language, setLanguageState] = useState<Language>(
-    () => initialLanguage ?? readStoredLanguage() ?? "en",
+    () =>
+      initialLanguage ??
+      readStoredLanguage() ??
+      getConfigStore().getState().config?.language ??
+      "en",
+  );
+  const pinned = useRef(initialLanguage != null || readStoredLanguage() != null);
+
+  useEffect(
+    () =>
+      getConfigStore().subscribe(() => {
+        if (pinned.current) {
+          return;
+        }
+        const fromConfig = getConfigStore().getState().config?.language;
+        if (fromConfig != null) {
+          setLanguageState(fromConfig);
+        }
+      }),
+    [],
   );
 
   const setLanguage = (next: Language) => {
+    pinned.current = true;
     setLanguageState(next);
     writeStoredLanguage(next);
   };

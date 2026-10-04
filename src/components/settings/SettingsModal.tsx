@@ -33,7 +33,7 @@ function SettingsModalForm({
   onSave,
   onClose,
 }: SettingsModalFormProps) {
-  const { t } = useI18n();
+  const { t, setLanguage } = useI18n();
   const [draft, setDraft] = useState<AppConfig>(() => structuredClone(config));
   const [saved, setSaved] = useState(false);
 
@@ -46,6 +46,7 @@ function SettingsModalForm({
   };
 
   const handleSave = () => {
+    setLanguage(draft.language);
     onSave(draft);
     setSaved(true);
   };
