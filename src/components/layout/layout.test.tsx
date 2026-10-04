@@ -59,10 +59,10 @@ describe("layout", () => {
     expect(screen.getByTestId("settings-placeholder")).toBeInTheDocument();
   });
 
-  it("switches tab content between placeholders", async () => {
+  it("switches tab content between dashboard and browser", async () => {
     const user = userEvent.setup();
     render(<App bridge={createMockBridge()} />);
-    expect(screen.getByTestId("dashboard-placeholder")).toBeInTheDocument();
+    expect(screen.getByTestId("service-card-daemon")).toBeInTheDocument();
     await user.click(screen.getByRole("tab", { name: en["tab.panel"] }));
     expect(screen.getByTestId("browser-placeholder")).toBeInTheDocument();
   });

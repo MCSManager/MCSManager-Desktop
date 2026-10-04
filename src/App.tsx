@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { I18nProvider } from "./i18n";
+import { Dashboard } from "./components/dashboard/Dashboard";
 import { TopBar } from "./components/layout/TopBar";
 import type { TabId } from "./components/layout/TabBar";
 import { useServices } from "./hooks/useServices";
@@ -24,11 +25,7 @@ function AppShell() {
         busy={busy}
       />
       <main className="app-main">
-        {tab === "dashboard" ? (
-          <div data-testid="dashboard-placeholder" />
-        ) : (
-          <div data-testid="browser-placeholder" />
-        )}
+        {tab === "dashboard" ? <Dashboard /> : <div data-testid="browser-placeholder" />}
       </main>
       {settingsOpen ? <div data-testid="settings-placeholder" /> : null}
     </div>
