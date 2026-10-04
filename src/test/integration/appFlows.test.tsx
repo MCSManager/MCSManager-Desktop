@@ -131,6 +131,21 @@ describe("app integration flows", () => {
     });
   });
 
+  it("app wires panel readiness badge", async () => {
+    const user = userEvent.setup();
+    const mock = createMockBridge();
+    await renderReadyApp(mock);
+    await act(async () => {
+      mock.emitStatus({ id: "panel", state: "running", pid: 23333, startedAt: 1700000000000 });
+    });
+
+    await user.click(screen.getByRole("tab", { name: en["tab.panel"] }));
+    await waitFor(() => {
+      expect(screen.getByText(en["status.ready"])).toBeInTheDocument();
+    });
+    expect(mock.calls).toContainEqual({ name: "probeTcp", args: ["127.0.0.1", 23333, 1000] });
+  });
+
   it("settings round-trip saves through bridge", async () => {
     const user = userEvent.setup();
     const mock = createMockBridge();

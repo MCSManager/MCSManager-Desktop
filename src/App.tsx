@@ -6,11 +6,13 @@ import { TopBar } from "./components/layout/TopBar";
 import type { TabId } from "./components/layout/TabBar";
 import { SettingsModal } from "./components/settings/SettingsModal";
 import { useConfig } from "./hooks/useConfig";
+import { useReadiness } from "./hooks/useReadiness";
 import { useServices } from "./hooks/useServices";
 import { openExternal } from "./services/openExternal";
 import { BridgeProvider, bridge as realBridge, type Bridge } from "./services/bridge";
 
 const DEFAULT_PANEL_URL = "http://localhost:23333";
+const HOST = "127.0.0.1";
 
 function AppShell() {
   const [tab, setTab] = useState<TabId>("dashboard");
@@ -21,6 +23,9 @@ function AppShell() {
     (status) => status.state === "starting" || status.state === "stopping",
   );
   const panelUrl = config?.panelUrl ?? DEFAULT_PANEL_URL;
+  const panelState = statuses["panel"]?.state ?? "stopped";
+  const panelPort = config?.services.panel.readyPort ?? null;
+  const panelReady = useReadiness(HOST, panelPort, panelState === "running");
 
   return (
     <div className="app-shell">
@@ -38,8 +43,8 @@ function AppShell() {
         ) : (
           <BrowserTab
             url={panelUrl}
-            ready={null}
-            serviceState={statuses["panel"]?.state ?? "stopped"}
+            ready={panelState === "running" && panelPort != null ? panelReady : null}
+            serviceState={panelState}
             onStartPanel={() => void start("panel")}
             onOpenExternal={() => void openExternal(panelUrl).catch(() => {})}
           />
