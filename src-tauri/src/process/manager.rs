@@ -1,10 +1,14 @@
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::thread;
 use std::time::Duration;
 
 use super::events::{EventSink, ProcessEvent, ProcessSpec, ServiceState, ServiceStatus};
 use super::managed::{ManagedProcess, ProcState, ProcessError};
+
+type CancelFlag = Arc<AtomicBool>;
+type PendingMap = Arc<Mutex<HashMap<String, CancelFlag>>>;
 
 pub struct ProcessManager {
     sink: EventSink,
@@ -13,6 +17,7 @@ pub struct ProcessManager {
     states: HashMap<String, Arc<Mutex<ProcState>>>,
     specs: HashMap<String, ProcessSpec>,
     order: Vec<String>,
+    pending: PendingMap,
 }
 
 fn lock_process(process: &Mutex<ManagedProcess>) -> MutexGuard<'_, ManagedProcess> {
@@ -23,6 +28,12 @@ fn lock_process(process: &Mutex<ManagedProcess>) -> MutexGuard<'_, ManagedProces
 
 fn lock_state(state: &Mutex<ProcState>) -> MutexGuard<'_, ProcState> {
     state
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+fn lock_pending(pending: &Mutex<HashMap<String, CancelFlag>>) -> MutexGuard<'_, HashMap<String, CancelFlag>> {
+    pending
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
@@ -55,6 +66,7 @@ impl ProcessManager {
             states: HashMap::new(),
             specs: HashMap::new(),
             order: Vec::new(),
+            pending: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -82,6 +94,15 @@ impl ProcessManager {
     pub fn register_or_update(&mut self, spec: ProcessSpec) -> Result<(), ProcessError> {
         if !self.processes.contains_key(&spec.id) {
             return self.register(spec);
+        }
+        // Cancelling the pending delayed start under the pending lock (the same
+        // lock the delayed thread checks its flag under) supersedes it: either
+        // the delayed thread already started the old instance (the state check
+        // below then rejects the replacement) or it will bail out silently.
+        let pending_map = Arc::clone(&self.pending);
+        let mut pending = lock_pending(&pending_map);
+        if let Some(flag) = pending.remove(&spec.id) {
+            flag.store(true, Ordering::SeqCst);
         }
         let current = {
             let state = self
@@ -135,6 +156,44 @@ impl ProcessManager {
         process.start()
     }
 
+    fn schedule_delayed_start(&self, id: &str, delay_ms: u64, process: Arc<Mutex<ManagedProcess>>) {
+        let cancel = {
+            let mut pending = lock_pending(&self.pending);
+            if let Some(previous) = pending.remove(id) {
+                previous.store(true, Ordering::SeqCst);
+            }
+            let flag = Arc::new(AtomicBool::new(false));
+            pending.insert(id.to_string(), Arc::clone(&flag));
+            flag
+        };
+        let sink = Arc::clone(&self.sink);
+        let pending = Arc::clone(&self.pending);
+        let id = id.to_string();
+        thread::spawn(move || {
+            thread::sleep(Duration::from_millis(delay_ms));
+            let guard = lock_pending(&pending);
+            if cancel.load(Ordering::SeqCst) {
+                return;
+            }
+            if let Err(error) = lock_process(&process).start() {
+                if is_real_error(&error) {
+                    sink(ProcessEvent::Error {
+                        id,
+                        message: error.to_string(),
+                    });
+                }
+            }
+            drop(guard);
+        });
+    }
+
+    fn cancel_all_pending(&self) {
+        let mut pending = lock_pending(&self.pending);
+        for (_, flag) in pending.drain() {
+            flag.store(true, Ordering::SeqCst);
+        }
+    }
+
     pub fn start_all(&self) -> Result<(), ProcessError> {
         let mut first_error: Option<ProcessError> = None;
         for id in &self.order {
@@ -154,19 +213,7 @@ impl ProcessManager {
                     }
                 }
             } else {
-                let sink = Arc::clone(&self.sink);
-                let id = id.clone();
-                thread::spawn(move || {
-                    thread::sleep(Duration::from_millis(delay_ms));
-                    if let Err(error) = lock_process(&process).start() {
-                        if is_real_error(&error) {
-                            sink(ProcessEvent::Error {
-                                id,
-                                message: error.to_string(),
-                            });
-                        }
-                    }
-                });
+                self.schedule_delayed_start(id, delay_ms, process);
             }
         }
         match first_error {
@@ -176,6 +223,7 @@ impl ProcessManager {
     }
 
     pub fn stop_all(&self) -> Result<(), ProcessError> {
+        self.cancel_all_pending();
         let mut first_error: Option<ProcessError> = None;
         for id in self.order.iter().rev() {
             if let Err(error) = self.stop(id) {
@@ -594,5 +642,54 @@ mod tests {
             "the single child should still be Running"
         );
         manager.shutdown();
+    }
+
+    #[test]
+    fn stop_all_cancels_pending_delayed_start() {
+        let (sink, events) = make_sink();
+        let mut manager = ProcessManager::new(sink, Duration::from_millis(300));
+        manager
+            .register(make_spec("cancel-delay", LONG_RUN, 500))
+            .expect("register succeeds");
+        manager.start_all().expect("start_all succeeds");
+        manager.stop_all().expect("stop_all succeeds");
+        thread::sleep(Duration::from_millis(1100));
+        assert!(
+            state_ids(&events, ServiceState::Running).is_empty(),
+            "no service may reach Running after stop_all cancelled the pending delayed start"
+        );
+        assert!(
+            ready_pids(&events).is_empty(),
+            "no child may spawn after stop_all cancelled the pending delayed start"
+        );
+        assert!(
+            !is_running(&manager, "cancel-delay"),
+            "the cancelled delayed start must leave the service stopped"
+        );
+    }
+
+    #[test]
+    fn register_or_update_cancels_pending_delayed_start() {
+        let (sink, events) = make_sink();
+        let mut manager = ProcessManager::new(sink, Duration::from_millis(300));
+        manager
+            .register(make_spec("swap-delay", LONG_RUN, 500))
+            .expect("register succeeds");
+        manager.start_all().expect("start_all succeeds");
+        manager
+            .register_or_update(make_spec("swap-delay", LONG_RUN, 0))
+            .expect("replacement during the delay window succeeds");
+        thread::sleep(Duration::from_millis(1100));
+        assert!(
+            state_ids(&events, ServiceState::Running).is_empty(),
+            "the superseded delayed thread must not start the old instance after replacement"
+        );
+        assert!(
+            ready_pids(&events).is_empty(),
+            "no child may spawn from the superseded delayed thread"
+        );
+        let fresh = manager.status("swap-delay").expect("status after replace");
+        assert_eq!(fresh.state, ServiceState::Stopped);
+        assert_eq!(fresh.pid, None);
     }
 }
