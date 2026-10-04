@@ -2,12 +2,12 @@ mod commands;
 pub mod config;
 pub mod process;
 
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::{Arc, Mutex, MutexGuard, RwLock};
 use std::time::Duration;
 
 use tauri::Manager;
 
-use commands::AppState;
+use commands::{read_manager, AppState};
 use process::manager::ProcessManager;
 
 type ShutdownSlot = Arc<Mutex<Option<std::thread::JoinHandle<()>>>>;
@@ -41,7 +41,7 @@ pub fn run() {
                 let _ = manager.register_or_update(spec);
             }
             app.manage(AppState {
-                manager: Arc::new(Mutex::new(manager)),
+                manager: Arc::new(RwLock::new(manager)),
                 config: Arc::new(Mutex::new(app_config)),
                 config_path,
             });
@@ -63,10 +63,7 @@ pub fn run() {
             if matches!(event, tauri::WindowEvent::Destroyed) && window.label() == "main" {
                 let manager = Arc::clone(&window.state::<AppState>().manager);
                 let handle = std::thread::spawn(move || {
-                    manager
-                        .lock()
-                        .unwrap_or_else(|poisoned| poisoned.into_inner())
-                        .shutdown();
+                    read_manager(&manager).shutdown();
                 });
                 *lock_slot(&shutdown_on_close) = Some(handle);
             }

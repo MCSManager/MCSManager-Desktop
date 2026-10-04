@@ -1,6 +1,6 @@
 use std::net::{TcpStream, ToSocketAddrs};
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::{Arc, Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard};
 use std::time::Duration;
 
 use serde::Serialize;
@@ -11,7 +11,7 @@ use crate::process::events::{EventSink, OutputStream, ProcessEvent, ProcessSpec,
 use crate::process::manager::ProcessManager;
 
 pub struct AppState {
-    pub manager: Arc<Mutex<ProcessManager>>,
+    pub manager: Arc<RwLock<ProcessManager>>,
     pub config: Arc<Mutex<AppConfig>>,
     pub config_path: PathBuf,
 }
@@ -71,9 +71,17 @@ pub fn make_event_sink(app: tauri::AppHandle) -> EventSink {
     })
 }
 
-fn lock_manager(manager: &Mutex<ProcessManager>) -> MutexGuard<'_, ProcessManager> {
+pub(crate) fn read_manager(manager: &RwLock<ProcessManager>) -> RwLockReadGuard<'_, ProcessManager> {
     manager
-        .lock()
+        .read()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+pub(crate) fn write_manager(
+    manager: &RwLock<ProcessManager>,
+) -> RwLockWriteGuard<'_, ProcessManager> {
+    manager
+        .write()
         .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
@@ -147,7 +155,7 @@ pub fn save_config(config: AppConfig, state: State<'_, AppState>) -> Result<(), 
 
 #[tauri::command]
 pub fn get_service_statuses(state: State<'_, AppState>) -> Vec<ServiceStatus> {
-    lock_manager(&state.manager).statuses()
+    read_manager(&state.manager).statuses()
 }
 
 #[tauri::command]
@@ -178,11 +186,12 @@ pub async fn start_service(id: String, state: State<'_, AppState>) -> Result<(),
             let config = lock_config(&config);
             build_spec(&id, &config)?
         };
-        let mut manager = lock_manager(&manager);
-        manager
+        write_manager(&manager)
             .register_or_update(spec)
             .map_err(|error| error.to_string())?;
-        manager.start(&id).map_err(|error| error.to_string())
+        read_manager(&manager)
+            .start(&id)
+            .map_err(|error| error.to_string())
     })
     .await
 }
@@ -190,7 +199,7 @@ pub async fn start_service(id: String, state: State<'_, AppState>) -> Result<(),
 #[tauri::command]
 pub async fn stop_service(id: String, state: State<'_, AppState>) -> Result<(), String> {
     let manager = Arc::clone(&state.manager);
-    run_blocking(move || lock_manager(&manager).stop(&id).map_err(|error| error.to_string())).await
+    run_blocking(move || read_manager(&manager).stop(&id).map_err(|error| error.to_string())).await
 }
 
 #[tauri::command]
@@ -198,18 +207,19 @@ pub async fn restart_service(id: String, state: State<'_, AppState>) -> Result<(
     let manager = Arc::clone(&state.manager);
     let config = Arc::clone(&state.config);
     run_blocking(move || {
-        lock_manager(&manager)
+        read_manager(&manager)
             .stop(&id)
             .map_err(|error| error.to_string())?;
         let spec = {
             let config = lock_config(&config);
             build_spec(&id, &config)?
         };
-        let mut manager = lock_manager(&manager);
-        manager
+        write_manager(&manager)
             .register_or_update(spec)
             .map_err(|error| error.to_string())?;
-        manager.start(&id).map_err(|error| error.to_string())
+        read_manager(&manager)
+            .start(&id)
+            .map_err(|error| error.to_string())
     })
     .await
 }
@@ -220,11 +230,15 @@ pub async fn start_all_services(state: State<'_, AppState>) -> Result<(), String
     let config = Arc::clone(&state.config);
     run_blocking(move || {
         let specs = enabled_specs(&lock_config(&config));
-        let mut manager = lock_manager(&manager);
-        for spec in specs {
-            let _ = manager.register_or_update(spec);
+        {
+            let mut manager = write_manager(&manager);
+            for spec in specs {
+                let _ = manager.register_or_update(spec);
+            }
         }
-        manager.start_all().map_err(|error| error.to_string())
+        read_manager(&manager)
+            .start_all()
+            .map_err(|error| error.to_string())
     })
     .await
 }
@@ -232,13 +246,57 @@ pub async fn start_all_services(state: State<'_, AppState>) -> Result<(), String
 #[tauri::command]
 pub async fn stop_all_services(state: State<'_, AppState>) -> Result<(), String> {
     let manager = Arc::clone(&state.manager);
-    run_blocking(move || lock_manager(&manager).stop_all().map_err(|error| error.to_string())).await
+    run_blocking(move || read_manager(&manager).stop_all().map_err(|error| error.to_string())).await
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::process::events::ServiceState;
     use std::net::TcpListener;
+    use std::thread;
+    use std::time::Instant;
+
+    const LONG_RUN: &str = "console.log('ready-'+process.pid); process.stdin.on('data',()=>process.exit(0)); setInterval(()=>{},1e3)";
+    const STUBBORN: &str = "setInterval(()=>{},1e3)";
+
+    fn test_spec(id: &str, code: &str) -> ProcessSpec {
+        ProcessSpec {
+            id: id.to_string(),
+            display_name: format!("test {}", id),
+            command: "node".to_string(),
+            args: vec!["-e".to_string(), code.to_string()],
+            working_dir: std::env::temp_dir().to_string_lossy().into_owned(),
+            start_delay_ms: 0,
+        }
+    }
+
+    fn wait_until(limit: Duration, mut condition: impl FnMut() -> bool) -> bool {
+        let deadline = Instant::now() + limit;
+        loop {
+            if condition() {
+                return true;
+            }
+            if Instant::now() >= deadline {
+                return condition();
+            }
+            thread::sleep(Duration::from_millis(20));
+        }
+    }
+
+    fn is_running(manager: &ProcessManager, id: &str) -> bool {
+        manager
+            .status(id)
+            .map(|status| status.state == ServiceState::Running && status.pid.is_some())
+            .unwrap_or(false)
+    }
+
+    fn state_seen(events: &Arc<Mutex<Vec<ProcessEvent>>>, id: &str, state: ServiceState) -> bool {
+        events.lock().unwrap().iter().any(|event| match event {
+            ProcessEvent::Status(status) => status.id == id && status.state == state,
+            _ => false,
+        })
+    }
 
     #[test]
     fn probe_tcp_detects_open_port() {
@@ -253,5 +311,72 @@ mod tests {
         let port = listener.local_addr().expect("local addr").port();
         drop(listener);
         assert!(!probe_tcp("127.0.0.1".to_string(), port, 1000));
+    }
+
+    #[test]
+    fn statuses_available_while_other_service_stops() {
+        let events: Arc<Mutex<Vec<ProcessEvent>>> = Arc::new(Mutex::new(Vec::new()));
+        let recorded = Arc::clone(&events);
+        let sink: EventSink = Arc::new(move |event| {
+            recorded.lock().unwrap().push(event);
+        });
+        let mut manager = ProcessManager::new(sink, Duration::from_millis(2500));
+        manager
+            .register(test_spec("busy-a", STUBBORN))
+            .expect("register busy-a");
+        manager
+            .register(test_spec("busy-b", LONG_RUN))
+            .expect("register busy-b");
+        let manager = Arc::new(RwLock::new(manager));
+        read_manager(&manager).start("busy-a").expect("start busy-a");
+        read_manager(&manager).start("busy-b").expect("start busy-b");
+        let both_up = wait_until(Duration::from_secs(2), || {
+            let manager = read_manager(&manager);
+            is_running(&manager, "busy-a") && is_running(&manager, "busy-b")
+        });
+        assert!(both_up, "both services must be Running before the stop");
+
+        let stopper = {
+            let manager = Arc::clone(&manager);
+            thread::spawn(move || read_manager(&manager).stop("busy-a").expect("stop busy-a"))
+        };
+        let stopping = wait_until(Duration::from_secs(2), || {
+            state_seen(&events, "busy-a", ServiceState::Stopping)
+        });
+        assert!(
+            stopping,
+            "stop of busy-a must be in flight (Stopping event seen)"
+        );
+
+        let began = Instant::now();
+        let statuses = read_manager(&manager).statuses();
+        let elapsed = began.elapsed();
+        assert!(
+            elapsed < Duration::from_millis(500),
+            "statuses() must not block behind the in-flight stop (took {:?})",
+            elapsed
+        );
+        let busy_a = statuses
+            .iter()
+            .find(|status| status.id == "busy-a")
+            .expect("busy-a in snapshot");
+        assert_eq!(
+            busy_a.state,
+            ServiceState::Stopping,
+            "snapshot must be taken mid-stop"
+        );
+        let busy_b = statuses
+            .iter()
+            .find(|status| status.id == "busy-b")
+            .expect("busy-b in snapshot");
+        assert_eq!(busy_b.state, ServiceState::Running);
+
+        stopper.join().expect("stop thread must not panic");
+        let final_state = read_manager(&manager)
+            .status("busy-a")
+            .expect("busy-a status")
+            .state;
+        assert_eq!(final_state, ServiceState::Stopped);
+        read_manager(&manager).shutdown();
     }
 }
