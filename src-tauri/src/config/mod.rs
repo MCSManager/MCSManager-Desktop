@@ -291,6 +291,27 @@ mod tests {
     }
 
     #[test]
+    fn path_issues_empty_for_default_config() {
+        let config = AppConfig::default();
+        assert!(config.path_issues().is_empty());
+    }
+
+    #[test]
+    fn path_issues_skips_disabled_service() {
+        let dir = unique_temp_dir();
+        let missing = dir.join("does-not-exist");
+
+        let mut config = AppConfig::default();
+        config.services.get_mut("daemon").expect("daemon service").enabled = false;
+        config.services.get_mut("daemon").expect("daemon service").working_dir =
+            missing.to_string_lossy().into_owned();
+
+        assert!(config.path_issues().is_empty());
+
+        cleanup(&dir);
+    }
+
+    #[test]
     fn load_fills_missing_fields_with_defaults_and_ignores_unknown() {
         let dir = unique_temp_dir();
         let path = dir.join("config.json");

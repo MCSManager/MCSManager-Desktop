@@ -126,7 +126,10 @@ impl AppConfig {
     pub fn path_issues(&self) -> Vec<String> {
         let mut issues = Vec::new();
         for (name, service) in &self.services {
-            if !service.working_dir.is_empty() && !Path::new(&service.working_dir).is_dir() {
+            if !service.enabled || service.working_dir.is_empty() {
+                continue;
+            }
+            if !Path::new(&service.working_dir).is_dir() {
                 issues.push(format!(
                     "[{}] working_dir is not an existing directory: {}",
                     name, service.working_dir
