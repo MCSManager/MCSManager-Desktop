@@ -64,6 +64,6 @@ describe("layout", () => {
     render(<App bridge={createMockBridge()} />);
     expect(screen.getByTestId("service-card-daemon")).toBeInTheDocument();
     await user.click(screen.getByRole("tab", { name: en["tab.panel"] }));
-    expect(screen.getByTestId("browser-placeholder")).toBeInTheDocument();
+    expect(screen.getByText(en["browser.notRunning.title"])).toBeInTheDocument();
   });
 });
