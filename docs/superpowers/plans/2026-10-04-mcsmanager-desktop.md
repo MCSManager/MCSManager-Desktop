@@ -37,16 +37,19 @@ All paths below are relative to `C:\Workspace\MCSM-Desktop\MCSManager-Desktop`.
 ### Task 1: Tooling baseline + CJK guard
 
 **Files:**
+
 - Modify: `package.json` (scripts + devDependencies), `vite.config.ts` untouched
 - Create: `vitest.config.ts`, `eslint.config.js`, `.prettierrc`, `src/test/setup.ts`, `src/test/cjk.ts`, `src/test/noChinese.test.ts`, `src/test/cjk.test.ts`
 
 **Interfaces:**
+
 - Consumes: none (first task).
 - Produces: `containsCjk(text: string): boolean` in `src/test/cjk.ts`; npm scripts `typecheck`, `lint`, `format`, `format:check`, `test`, `test:watch`, `test:rust` usable by every later task.
 
 - [ ] **Step 1: Write failing tests for the CJK detector and the source scan**
 
 `src/test/cjk.test.ts`:
+
 ```ts
 import { describe, it, expect } from "vitest";
 import { containsCjk } from "./cjk";
@@ -65,6 +68,7 @@ describe("containsCjk", () => {
 ```
 
 `src/test/noChinese.test.ts`:
+
 ```ts
 import { describe, it, expect } from "vitest";
 import { containsCjk } from "./cjk";
@@ -77,6 +81,7 @@ describe("no Chinese in code", () => {
   });
 });
 ```
+
 Implement `collectCodeFiles` inside the test file: recursive `readdirSync`, include extensions `.ts .tsx .css .rs`, exclude any path containing `src/i18n/locales`.
 
 - [ ] **Step 2: Run tests to verify they fail**
@@ -101,10 +106,12 @@ Run: `npm test` → both CJK tests PASS. Run `npm run typecheck` → clean. Run 
 ### Task 2: Rust config model
 
 **Files:**
+
 - Create: `src-tauri/src/config/mod.rs`, `src-tauri/src/config/model.rs`
 - Modify: `src-tauri/src/lib.rs` (add `mod config;` only; wiring comes in Task 6)
 
 **Interfaces:**
+
 - Consumes: none.
 - Produces (used by Tasks 4–6, 8, 12):
   - `Language { En, Zh }` — serde lowercase `"en"`/`"zh"`; `Default = En`.
@@ -144,10 +151,12 @@ Run: `cargo test` (workdir `src-tauri`) — Expected: all config tests PASS.
 ### Task 3: Rust process events + platform helpers
 
 **Files:**
+
 - Create: `src-tauri/src/process/mod.rs`, `src-tauri/src/process/events.rs`, `src-tauri/src/process/platform.rs`
 - Modify: none
 
 **Interfaces:**
+
 - Consumes: none (config keeps no `process` imports; Task 6 joins them).
 - Produces (used by Tasks 4–6):
   - `events.rs` (exact):
@@ -181,10 +190,12 @@ Run: `cargo test` (workdir `src-tauri`) — Expected: all config tests PASS.
 ### Task 4: Rust ManagedProcess (core lifecycle)
 
 **Files:**
+
 - Create: `src-tauri/src/process/managed.rs`
 - Modify: `src-tauri/src/process/mod.rs` (`pub mod managed;`)
 
 **Interfaces:**
+
 - Consumes: Task 2/3 types (`ProcessSpec`, `ProcessEvent`, `ServiceState`, `ServiceStatus`, `EventSink`, `platform::*`).
 - Produces (used by Tasks 5–6):
   - `ProcessError { NotFound(String), Duplicate(String), InvalidState(String), Spawn(String), Io(String) }` with `Display` + `Error`; declared in `managed.rs`.
@@ -216,10 +227,12 @@ Run: `cargo test` (workdir `src-tauri`) — Expected: all config tests PASS.
 ### Task 5: Rust ProcessManager (registry + batch ops)
 
 **Files:**
+
 - Create: `src-tauri/src/process/manager.rs`
 - Modify: `src-tauri/src/process/mod.rs` (`pub mod manager;`)
 
 **Interfaces:**
+
 - Consumes: `ManagedProcess`, `ProcessError`, `EventSink`.
 - Produces (used by Task 6):
   - `ProcessManager::new(sink: EventSink, stop_timeout: Duration) -> Self`
@@ -252,17 +265,19 @@ Run: `cargo test` (workdir `src-tauri`) — Expected: all config tests PASS.
 ### Task 6: Tauri wiring — commands, events, window config
 
 **Files:**
+
 - Create: `src-tauri/src/commands.rs`
 - Modify: `src-tauri/src/lib.rs`, `src-tauri/tauri.conf.json`, `src-tauri/capabilities/default.json`
 - Test: `src-tauri/src/commands.rs` (`#[cfg(test)]` for `probe_tcp` only)
 
 **Interfaces:**
+
 - Consumes: Tasks 2–5.
 - Produces (frontend contract — mirror in Task 8 `src/types.ts`):
   - Events emitted via `app.emit`: `service-status` (payload `ServiceStatus`), `service-output` (`{ id, stream, line, timestamp }`), `service-error` (`{ id, message }`).
   - Commands (all `Result<_, String>` error strings, English):
     - `get_config() -> ConfigResponse { config: AppConfig, warnings: Vec<String> }` (warnings = `path_issues()`).
-    - `save_config(config: AppConfig) -> ()` (validates; persists to config path). **Decision: `start_service` builds `ProcessSpec` from the *current* config at call time** (`ServiceConfig::command_and_args(node_path)` + `working_dir`/`start_delay_ms`, `display_name = id`) and (re)registers it, so Settings changes apply without app restart.
+    - `save_config(config: AppConfig) -> ()` (validates; persists to config path). **Decision: `start_service` builds `ProcessSpec` from the _current_ config at call time** (`ServiceConfig::command_and_args(node_path)` + `working_dir`/`start_delay_ms`, `display_name = id`) and (re)registers it, so Settings changes apply without app restart.
     - `get_service_statuses() -> Vec<ServiceStatus>`
     - `start_service(id: String)` / `stop_service(id: String)` / `restart_service(id: String)` / `start_all_services()` / `stop_all_services()` — async, run manager calls via `tauri::async_runtime::spawn_blocking` on cloned `Arc<Mutex<ProcessManager>>`.
     - `probe_tcp(host: String, port: u16, timeout_ms: u64) -> bool` — `TcpStream::connect_timeout`.
@@ -289,10 +304,12 @@ Run: `cargo test` (workdir `src-tauri`) → green; then `cargo check` (workdir `
 ### Task 7: TS i18n module + locales
 
 **Files:**
+
 - Create: `src/i18n/index.tsx`, `src/i18n/locales/en.json`, `src/i18n/locales/zh.json`, `src/i18n/i18n.test.tsx`
 - Modify: none
 
 **Interfaces:**
+
 - Consumes: none.
 - Produces (used by every UI task):
   - `type Language = "en" | "zh"`.
@@ -324,6 +341,7 @@ it("returns key when missing everywhere", ...)  // t("nope.key") === "nope.key"
 it("interpolates variables", ...)               // t("status.pid", { pid: 42 }) contains "42"
 it("persists language choice", ...)             // setLanguage("zh") -> localStorage["mcsm-desktop.lang"] === "zh"
 ```
+
 (Chinese expectations read the values from the imported `zh` JSON so the test file itself stays ASCII — or assert `t("action.start") === zh["action.start"]`. Use the JSON-import approach to keep N1 true everywhere.)
 
 - [ ] **Step 2: Run tests to verify they fail** — Expected: FAIL, module missing.
@@ -335,11 +353,13 @@ it("persists language choice", ...)             // setLanguage("zh") -> localSto
 ### Task 8: TS types, bridge, stores, hooks
 
 **Files:**
+
 - Create: `src/types.ts`, `src/services/bridge.ts`, `src/state/consoleBuffer.ts`, `src/state/serviceStore.ts`, `src/hooks/useServices.ts`, `src/hooks/useConfig.ts`, `src/hooks/useReadiness.ts`, `src/test/mockBridge.ts`
 - Test: `src/state/consoleBuffer.test.ts`, `src/state/serviceStore.test.ts`, `src/hooks/useServices.test.tsx`, `src/hooks/useReadiness.test.tsx`
 - Modify: none
 
 **Interfaces:**
+
 - Consumes: Task 6 command/event contract (wire shapes), Task 7 `Language`.
 - Produces (used by UI tasks 9–13):
   - `src/types.ts`:
@@ -347,12 +367,45 @@ it("persists language choice", ...)             // setLanguage("zh") -> localSto
     export type ServiceId = "daemon" | "panel";
     export type ServiceState = "stopped" | "starting" | "running" | "stopping" | "error";
     export type OutputStream = "stdout" | "stderr";
-    export interface ServiceStatus { id: string; state: ServiceState; pid?: number; startedAt?: number; exitCode?: number; error?: string; }
-    export interface OutputLine { id: string; stream: OutputStream; line: string; timestamp: number; }
-    export interface ServiceConfig { enabled: boolean; workingDir: string; script: string; extraArgs: string[]; startDelayMs: number; readyPort: number | null; }
-    export interface AppConfig { version: number; language: Language; nodePath: string; panelUrl: string; stopTimeoutMs: number; maxLogLines: number; services: Record<ServiceId, ServiceConfig>; }
-    export interface ConfigResponse { config: AppConfig; warnings: string[]; }
-    export interface AppInfo { version: string; configPath: string; }
+    export interface ServiceStatus {
+      id: string;
+      state: ServiceState;
+      pid?: number;
+      startedAt?: number;
+      exitCode?: number;
+      error?: string;
+    }
+    export interface OutputLine {
+      id: string;
+      stream: OutputStream;
+      line: string;
+      timestamp: number;
+    }
+    export interface ServiceConfig {
+      enabled: boolean;
+      workingDir: string;
+      script: string;
+      extraArgs: string[];
+      startDelayMs: number;
+      readyPort: number | null;
+    }
+    export interface AppConfig {
+      version: number;
+      language: Language;
+      nodePath: string;
+      panelUrl: string;
+      stopTimeoutMs: number;
+      maxLogLines: number;
+      services: Record<ServiceId, ServiceConfig>;
+    }
+    export interface ConfigResponse {
+      config: AppConfig;
+      warnings: string[];
+    }
+    export interface AppInfo {
+      version: string;
+      configPath: string;
+    }
     ```
   - `src/services/bridge.ts`:
     ```ts
@@ -376,14 +429,26 @@ it("persists language choice", ...)             // setLanguage("zh") -> localSto
     `BridgeContext` + `BridgeProvider({ bridge, children })` + `useBridge()` live in this file too.
   - `src/state/consoleBuffer.ts` — pure functions:
     ```ts
-    export interface ConsoleLine { id: number; stream: OutputStream; text: string; timestamp: number; }
-    export function appendLine(state: ConsoleLine[], entry: { stream: OutputStream; text: string; timestamp: number }, maxLines: number): ConsoleLine[];
+    export interface ConsoleLine {
+      id: number;
+      stream: OutputStream;
+      text: string;
+      timestamp: number;
+    }
+    export function appendLine(
+      state: ConsoleLine[],
+      entry: { stream: OutputStream; text: string; timestamp: number },
+      maxLines: number,
+    ): ConsoleLine[];
     export function clearLines(): ConsoleLine[];
     ```
     ids strictly increase (`(last?.id ?? 0) + 1`); when `length > maxLines`, keep the tail (drop from the front).
   - `src/state/serviceStore.ts`:
     ```ts
-    export interface ServicesState { statuses: Record<string, ServiceStatus>; outputs: Record<string, ConsoleLine[]>; }
+    export interface ServicesState {
+      statuses: Record<string, ServiceStatus>;
+      outputs: Record<string, ConsoleLine[]>;
+    }
     export function createServicesStore(maxLines: number): {
       getState(): ServicesState;
       subscribe(cb: () => void): () => void;
@@ -401,25 +466,32 @@ it("persists language choice", ...)             // setLanguage("zh") -> localSto
 - [ ] **Step 1: Write failing tests**
 
 `consoleBuffer.test.ts`:
+
 ```ts
 it("appendLine_respects_max_and_keeps_tail", ...)  // max 3, push 5 -> last 3 texts, ids 3,4,5
 it("appendLine tags stream", ...)                  // stderr entry keeps stream
 it("clearLines empties", ...)
 ```
+
 `serviceStore.test.ts`:
+
 ```ts
 it("applyOutput writes into per-service buffer", ...)
 it("applyStatus upserts status map", ...)
 it("applyError appends synthetic stderr line", ...)
 it("buffers are independent per service", ...)
 ```
+
 `useServices.test.tsx`:
+
 ```ts
 it("renders status updates from bridge events", ...)   // emitStatus -> hook state updates (renderHook + act)
 it("start calls bridge and reports actionError on reject", ...) // mock startService rejects -> actionError set
 it("unsubscribes on unmount", ...)                      // emit after unmount does not throw / callback count stable
 ```
+
 `useReadiness.test.tsx`:
+
 ```ts
 it("polls probeTcp while enabled", ...)                 // fake timers, probeTcp returns true -> hook true
 it("disabled when port null", ...)                      // no probe calls
@@ -434,11 +506,13 @@ it("disabled when port null", ...)                      // no probe calls
 ### Task 9: App shell + layout components + styles
 
 **Files:**
+
 - Create: `src/styles/tokens.css`, `src/styles/global.css`, `src/components/layout/Icon.tsx`, `src/components/layout/TopBar.tsx`, `src/components/layout/TabBar.tsx`, `src/components/layout/LanguageSwitcher.tsx`, `src/components/layout/layout.test.tsx`
 - Modify: `src/App.tsx`, `src/main.tsx`, `index.html` (title → `MCSManager Desktop`), `package.json` unchanged
 - Delete: `src/App.css`, `src/assets/react.svg` (template leftovers)
 
 **Interfaces:**
+
 - Consumes: Task 7 `useI18n`, Task 8 `useBridge`/`useServices` (App wiring only).
 - Produces (used by Tasks 10–12):
   - `Icon({ name, size = 16 }: { name: "play" | "stop" | "restart" | "settings" | "globe" | "refresh" | "external" | "copy" | "trash" | "logo"; size?: number })` — inline SVG, `aria-hidden`.
@@ -468,10 +542,12 @@ it("settings button opens settings", ...)             // onOpenSettings called
 ### Task 10: Dashboard (ServiceCard + ConsolePanel)
 
 **Files:**
+
 - Create: `src/components/dashboard/Dashboard.tsx`, `src/components/dashboard/ServiceCard.tsx`, `src/components/dashboard/ConsolePanel.tsx`, `src/components/dashboard/StatusBadge.tsx`, `src/components/dashboard/ActionButton.tsx`, `src/components/dashboard/dashboard.test.tsx`
 - Modify: `src/App.tsx` (swap dashboard placeholder for `Dashboard`)
 
 **Interfaces:**
+
 - Consumes: Tasks 7–9 (`useServices`, `useReadiness`, `useI18n`, `Icon`).
 - Produces:
   - `StatusBadge({ state }: { state: ServiceState })` — dot + `t("state." + state)`.
@@ -500,10 +576,12 @@ it("renders pid and exit code", ...)                 // status with pid 42 -> "4
 ### Task 11: BrowserTab (panel web view)
 
 **Files:**
+
 - Create: `src/components/browser/BrowserTab.tsx`, `src/components/browser/browser.test.tsx`
 - Modify: `src/App.tsx` (swap browser placeholder for `BrowserTab`)
 
 **Interfaces:**
+
 - Consumes: Tasks 7–9.
 - Produces:
   - `BrowserTab({ url, ready, serviceState, onStartPanel }: { url: string; ready: boolean | null; serviceState: ServiceState; onStartPanel: () => void })` — toolbar (url text `t` not needed for URL itself, refresh button `t("browser.refresh")`, external button `t("browser.openExternal")` calling `window.open(url, "_blank")` via bridge-free `openExternal` prop: `{ onOpenExternal: () => void }` — add to props so tests can spy: final signature `BrowserTab({ url, ready, serviceState, onStartPanel, onOpenExternal }: {...})`); iframe `<iframe title={t("tab.panel")} src={url} key={refreshNonce} />` filling the content area; when `serviceState !== "running"` render overlay with `t("browser.notRunning.title")`, `t("browser.notRunning.hint")` and a start button wired to `onStartPanel`.
@@ -528,10 +606,12 @@ it("start button calls onStartPanel", ...)
 ### Task 12: Settings modal + config editing
 
 **Files:**
+
 - Create: `src/components/settings/SettingsModal.tsx`, `src/components/settings/ServiceSettingsForm.tsx`, `src/components/settings/settings.test.tsx`
 - Modify: `src/App.tsx` (wire real `SettingsModal`)
 
 **Interfaces:**
+
 - Consumes: Tasks 7–9 (`useConfig`, `Bridge`, `AppConfig`).
 - Produces:
   - `ServiceSettingsForm({ serviceId, value, onChange }: { serviceId: ServiceId; value: ServiceConfig; onChange: (v: ServiceConfig) => void })` — fields: enabled (checkbox), workingDir, script, extraArgs (comma-separated text ⇄ `string[]`), startDelayMs (number), readyPort (number, empty ⇄ `null`).
@@ -557,11 +637,13 @@ it("shows path warnings", ...)                            // warnings ["missing 
 ### Task 13: Integration flows + final verification
 
 **Files:**
+
 - Create: `src/test/integration/appFlows.test.tsx`, `src/test/integration/noChinese.test.ts` (move from `src/test/noChinese.test.ts` if preferred — keep original path, do not duplicate)
 - Modify: `README.md` (replace template text with: what the app is, how to point it at a built MCSManager (`workingDir` = `production-code/daemon` / `production-code/web`, `script` = `app.js`; dev checkout: `script` = `production/app.js`), how to run tests)
 - Modify: anything the tests force to fix
 
 **Interfaces:**
+
 - Consumes: `App` with `createMockBridge()`.
 - Produces: none (verification task).
 

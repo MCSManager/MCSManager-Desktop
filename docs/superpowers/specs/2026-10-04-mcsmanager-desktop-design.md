@@ -63,33 +63,33 @@ the user can switch to an embedded browser tab that renders the panel web UI
 
 ### Functional
 
-| ID | Requirement |
-|----|-------------|
-| F1 | Start / stop / restart the daemon and panel services independently. |
-| F2 | Start-all (daemon first, then panel after a configurable delay) and stop-all. |
-| F3 | Real-time stdout/stderr streaming per service into a console view (auto-scroll, clear, copy-all, pause-scroll). |
-| F4 | Status model per service: `stopped / starting / running / stopping / error`, with PID, uptime, last exit code. |
-| F5 | Readiness probe (TCP) per service; "Ready" indicator used to inform the user the panel URL is reachable. |
-| F6 | Tab bar (top) switching Dashboard ⇄ Panel browser mode; browser loads the configured panel URL in an iframe with refresh + "open in external browser" actions. |
-| F7 | Settings editor for: node executable path, per-service working dir / entry script / extra args / start delay / ready port, panel URL, stop timeout, max log lines. Persisted to a JSON config file; loaded on startup. |
-| F8 | i18n EN/中文 switcher (top-right); default English; language persisted. |
-| F9 | Errors surfaced in UI (spawn failure, missing working dir, non-zero exit, stop timeout) with actionable messages. |
+| ID  | Requirement                                                                                                                                                                                                            |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| F1  | Start / stop / restart the daemon and panel services independently.                                                                                                                                                    |
+| F2  | Start-all (daemon first, then panel after a configurable delay) and stop-all.                                                                                                                                          |
+| F3  | Real-time stdout/stderr streaming per service into a console view (auto-scroll, clear, copy-all, pause-scroll).                                                                                                        |
+| F4  | Status model per service: `stopped / starting / running / stopping / error`, with PID, uptime, last exit code.                                                                                                         |
+| F5  | Readiness probe (TCP) per service; "Ready" indicator used to inform the user the panel URL is reachable.                                                                                                               |
+| F6  | Tab bar (top) switching Dashboard ⇄ Panel browser mode; browser loads the configured panel URL in an iframe with refresh + "open in external browser" actions.                                                         |
+| F7  | Settings editor for: node executable path, per-service working dir / entry script / extra args / start delay / ready port, panel URL, stop timeout, max log lines. Persisted to a JSON config file; loaded on startup. |
+| F8  | i18n EN/中文 switcher (top-right); default English; language persisted.                                                                                                                                                |
+| F9  | Errors surfaced in UI (spawn failure, missing working dir, non-zero exit, stop timeout) with actionable messages.                                                                                                      |
 
 ### Non-functional
 
-| ID | Requirement |
-|----|-------------|
-| N1 | All code (comments, identifiers, strings) in English; Chinese allowed only in locale/copy files (`src/i18n/locales/*.json`). Enforced by an automated test. |
-| N2 | One reusable process manager drives both services (single implementation, two registrations). |
-| N3 | Tauri APIs hidden behind one typed bridge module so UI logic is testable with a mock. |
-| N4 | Unit tests for complex modules (Rust process manager, Rust config, TS i18n, TS console buffer, TS status reducer). |
-| N5 | Integration tests for full user flows (start → stream → stop; tab switching; language switching; iframe URL from config). |
-| N6 | `npm run lint`, `npm run typecheck`, `npm test`, `cargo test` all pass. |
-| N7 | No console-window flashes on Windows when spawning children. |
+| ID  | Requirement                                                                                                                                                 |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| N1  | All code (comments, identifiers, strings) in English; Chinese allowed only in locale/copy files (`src/i18n/locales/*.json`). Enforced by an automated test. |
+| N2  | One reusable process manager drives both services (single implementation, two registrations).                                                               |
+| N3  | Tauri APIs hidden behind one typed bridge module so UI logic is testable with a mock.                                                                       |
+| N4  | Unit tests for complex modules (Rust process manager, Rust config, TS i18n, TS console buffer, TS status reducer).                                          |
+| N5  | Integration tests for full user flows (start → stream → stop; tab switching; language switching; iframe URL from config).                                   |
+| N6  | `npm run lint`, `npm run typecheck`, `npm test`, `cargo test` all pass.                                                                                     |
+| N7  | No console-window flashes on Windows when spawning children.                                                                                                |
 
 ## 4. Approaches considered
 
-### Approach A — Custom Rust process manager + Tauri events + React dashboard *(chosen)*
+### Approach A — Custom Rust process manager + Tauri events + React dashboard _(chosen)_
 
 Rust owns child processes (`std::process::Command`), a generic `ProcessManager`
 registers N services, streams output through an injectable event sink (wired to
@@ -197,24 +197,24 @@ Stopped ──start()──▶ Starting ──spawn ok──▶ Running ──st
 
 #### Events (Tauri event names)
 
-| Event | Payload |
-|-------|---------|
-| `service-status` | `{ id, state, pid?, startedAt?, exitCode?, error? }` |
+| Event            | Payload                                               |
+| ---------------- | ----------------------------------------------------- |
+| `service-status` | `{ id, state, pid?, startedAt?, exitCode?, error? }`  |
 | `service-output` | `{ id, stream: "stdout"\|"stderr", line, timestamp }` |
-| `service-error` | `{ id, message }` |
+| `service-error`  | `{ id, message }`                                     |
 
 The sink in `lib.rs` maps `ProcessEvent` → `app.emit(name, payload)`.
 
 #### Commands (UI-facing)
 
-| Command | Purpose |
-|---------|---------|
-| `get_config` / `save_config` | load / persist `AppConfig` (validated) |
-| `get_service_statuses` | snapshot of all service statuses (for UI init) |
-| `start_service(id)` / `stop_service(id)` / `restart_service(id)` | lifecycle |
-| `start_all_services` / `stop_all_services` | batch lifecycle |
-| `probe_tcp(host, port, timeoutMs)` | readiness check (used by F5) |
-| `get_app_info` | app version + config file path (Settings footer) |
+| Command                                                          | Purpose                                          |
+| ---------------------------------------------------------------- | ------------------------------------------------ |
+| `get_config` / `save_config`                                     | load / persist `AppConfig` (validated)           |
+| `get_service_statuses`                                           | snapshot of all service statuses (for UI init)   |
+| `start_service(id)` / `stop_service(id)` / `restart_service(id)` | lifecycle                                        |
+| `start_all_services` / `stop_all_services`                       | batch lifecycle                                  |
+| `probe_tcp(host, port, timeoutMs)`                               | readiness check (used by F5)                     |
+| `get_app_info`                                                   | app version + config file path (Settings footer) |
 
 #### Config file
 
@@ -230,8 +230,22 @@ created with defaults on first run.
   "stopTimeoutMs": 35000,
   "maxLogLines": 2000,
   "services": {
-    "daemon": { "enabled": true, "workingDir": "", "script": "app.js", "extraArgs": [], "startDelayMs": 0, "readyPort": 24444 },
-    "panel":  { "enabled": true, "workingDir": "", "script": "app.js", "extraArgs": [], "startDelayMs": 1500, "readyPort": 23333 }
+    "daemon": {
+      "enabled": true,
+      "workingDir": "",
+      "script": "app.js",
+      "extraArgs": [],
+      "startDelayMs": 0,
+      "readyPort": 24444
+    },
+    "panel": {
+      "enabled": true,
+      "workingDir": "",
+      "script": "app.js",
+      "extraArgs": [],
+      "startDelayMs": 1500,
+      "readyPort": 23333
+    }
   }
 }
 ```
@@ -304,15 +318,15 @@ React via `useSyncExternalStore`. `bridge.ts` is the only module importing
 
 ## 6. Error handling
 
-| Failure | Behavior |
-|---------|----------|
-| Working dir / script missing | `start()` fails fast → `service-error` event → card shows error state + message (settings shortcut). |
-| Node executable missing | Same as above (spawn error captured). |
-| Port already in use | Process exits non-zero → `Error` state with exit code; console keeps the process's own error text visible. |
-| Stop timeout | Force-kill fallback; status still resolves to `Stopped`; a warning line is injected into the console buffer. |
-| Config file corrupt / invalid | Fall back to defaults, keep a backup copy (`config.json.bak`), surface a warning in Settings. |
-| Panel URL unreachable | Browser tab overlay (F6) + readiness badge amber; never a crash. |
-| Bridge failure (invoke rejected) | Toast-style inline error on the action that failed; state unchanged. |
+| Failure                          | Behavior                                                                                                     |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| Working dir / script missing     | `start()` fails fast → `service-error` event → card shows error state + message (settings shortcut).         |
+| Node executable missing          | Same as above (spawn error captured).                                                                        |
+| Port already in use              | Process exits non-zero → `Error` state with exit code; console keeps the process's own error text visible.   |
+| Stop timeout                     | Force-kill fallback; status still resolves to `Stopped`; a warning line is injected into the console buffer. |
+| Config file corrupt / invalid    | Fall back to defaults, keep a backup copy (`config.json.bak`), surface a warning in Settings.                |
+| Panel URL unreachable            | Browser tab overlay (F6) + readiness badge amber; never a crash.                                             |
+| Bridge failure (invoke rejected) | Toast-style inline error on the action that failed; state unchanged.                                         |
 
 All errors use user-facing i18n keys; raw error details go to the console panel.
 
@@ -321,6 +335,7 @@ All errors use user-facing i18n keys; raw error details go to the console panel.
 Test-first order (each module: failing test → implement → refactor):
 
 **Rust (`cargo test`, no Tauri runtime needed thanks to sink injection):**
+
 1. `config/model` — defaults, serde round-trip, validation bounds, language enum.
 2. `process/managed` — spawn a tiny Node script (`node -e "..."`):
    output lines forwarded with correct stream tags; state transitions
@@ -329,19 +344,11 @@ Test-first order (each module: failing test → implement → refactor):
 3. `process/manager` — registration, `start_all` ordering + delay, `stop_all`,
    status snapshots, unknown id errors.
 
-**TypeScript (`vitest` + Testing Library, jsdom):**
-4. `i18n` — default English, switch to zh, interpolation, fallback key behavior.
-5. `consoleBuffer` / `serviceStore` — ring limit, stream tagging, reducer transitions.
-6. `noChinese` guard test (N1).
+**TypeScript (`vitest` + Testing Library, jsdom):** 4. `i18n` — default English, switch to zh, interpolation, fallback key behavior. 5. `consoleBuffer` / `serviceStore` — ring limit, stream tagging, reducer transitions. 6. `noChinese` guard test (N1).
 
-**Integration (vitest, full `App` with `mockBridge`):**
-7. Start-all flow: invoke calls made → status events update both cards →
-   output events render in both consoles.
-8. Stop flow + unexpected exit → error badge rendering.
-9. Language switch flips visible copy EN→中文 without remounting services.
-10. Tab switching; Panel tab iframe `src` equals configured `panelUrl`; overlay
-    when service not running.
-11. Settings round-trip: edit fields → save → bridge receives validated config.
+**Integration (vitest, full `App` with `mockBridge`):** 7. Start-all flow: invoke calls made → status events update both cards →
+output events render in both consoles. 8. Stop flow + unexpected exit → error badge rendering. 9. Language switch flips visible copy EN→中文 without remounting services. 10. Tab switching; Panel tab iframe `src` equals configured `panelUrl`; overlay
+when service not running. 11. Settings round-trip: edit fields → save → bridge receives validated config.
 
 ## 8. Tooling
 
@@ -357,14 +364,14 @@ Test-first order (each module: failing test → implement → refactor):
 
 ## 9. Risks & mitigations
 
-| Risk | Mitigation |
-|------|------------|
-| iframe blocked by future MCSManager headers | Toolbar "open in external browser" fallback; documented in README. |
-| Daemon soft-stop exceeds timeout with instances running | `stopTimeoutMs` configurable (default 35 s); force-kill fallback; console warning. |
-| Windows tree-kill orphans grandchildren | `taskkill /T /F` kills the tree; stdin `exit` is the primary path anyway. |
-| Long-running output floods the UI | Frontend ring buffer (`maxLogLines`); line batching (coalesce events per animation frame). |
-| Config schema drift | `version` field + tolerant serde defaults + backup on parse failure. |
-| React 19 + Testing Library version friction | Pin `@testing-library/react` ≥ 16.1 (React 19 support). |
+| Risk                                                    | Mitigation                                                                                 |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| iframe blocked by future MCSManager headers             | Toolbar "open in external browser" fallback; documented in README.                         |
+| Daemon soft-stop exceeds timeout with instances running | `stopTimeoutMs` configurable (default 35 s); force-kill fallback; console warning.         |
+| Windows tree-kill orphans grandchildren                 | `taskkill /T /F` kills the tree; stdin `exit` is the primary path anyway.                  |
+| Long-running output floods the UI                       | Frontend ring buffer (`maxLogLines`); line batching (coalesce events per animation frame). |
+| Config schema drift                                     | `version` field + tolerant serde defaults + backup on parse failure.                       |
+| React 19 + Testing Library version friction             | Pin `@testing-library/react` ≥ 16.1 (React 19 support).                                    |
 
 ## 10. Assumptions (unattended decisions)
 
