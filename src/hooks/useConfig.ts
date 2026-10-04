@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { useBridge } from "../services/bridge";
+import { getConfigStore } from "../state/configStore";
 import type { AppConfig } from "../types";
 
 export interface UseConfigResult {
@@ -17,42 +18,25 @@ function errorMessage(error: unknown): string {
 
 export function useConfig(): UseConfigResult {
   const bridge = useBridge();
-  const [config, setConfig] = useState<AppConfig | null>(null);
-  const [warnings, setWarnings] = useState<string[]>([]);
+  const store = getConfigStore();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const { config, warnings } = useSyncExternalStore(store.subscribe, store.getState, store.getState);
 
   const reload = useCallback(async () => {
     try {
       const response = await bridge.getConfig();
-      setConfig(response.config);
-      setWarnings(response.warnings);
+      store.applyLoaded(response);
       setError(null);
     } catch (loadError) {
       setError(errorMessage(loadError));
     }
-  }, [bridge]);
+  }, [bridge, store]);
 
   useEffect(() => {
-    let cancelled = false;
-    void bridge.getConfig().then(
-      (response) => {
-        if (!cancelled) {
-          setConfig(response.config);
-          setWarnings(response.warnings);
-          setError(null);
-        }
-      },
-      (loadError: unknown) => {
-        if (!cancelled) {
-          setError(errorMessage(loadError));
-        }
-      },
-    );
-    return () => {
-      cancelled = true;
-    };
-  }, [bridge]);
+    void reload();
+  }, [reload]);
 
   const save = useCallback(
     async (next: AppConfig) => {

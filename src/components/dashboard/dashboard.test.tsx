@@ -3,6 +3,7 @@ import { act, cleanup, render, screen, waitFor, within } from "@testing-library/
 import userEvent from "@testing-library/user-event";
 import App from "../../App";
 import en from "../../i18n/locales/en.json";
+import { resetConfigStore } from "../../state/configStore";
 import { resetServicesStore } from "../../state/serviceStore";
 import { createMockBridge, type MockBridge } from "../../test/mockBridge";
 
@@ -13,6 +14,7 @@ function renderApp(mock: MockBridge) {
 describe("dashboard", () => {
   beforeEach(() => {
     localStorage.clear();
+    resetConfigStore();
     resetServicesStore();
   });
 

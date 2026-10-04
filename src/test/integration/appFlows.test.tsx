@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import App from "../../App";
 import en from "../../i18n/locales/en.json";
 import zh from "../../i18n/locales/zh.json";
+import { resetConfigStore } from "../../state/configStore";
 import { resetServicesStore } from "../../state/serviceStore";
 import { createMockBridge, type MockBridge } from "../../test/mockBridge";
 import type { AppConfig } from "../../types";
@@ -21,11 +22,13 @@ async function renderReadyApp(mock: MockBridge) {
 describe("app integration flows", () => {
   beforeEach(() => {
     localStorage.clear();
+    resetConfigStore();
     resetServicesStore();
   });
 
   afterEach(() => {
     cleanup();
+    resetConfigStore();
     resetServicesStore();
   });
 
@@ -155,6 +158,27 @@ describe("app integration flows", () => {
 
     await user.click(screen.getByRole("tab", { name: en["tab.panel"] }));
     expect(screen.getByText("http://127.0.0.1:30000")).toBeInTheDocument();
+  });
+
+  it("config save refreshes all consumers", async () => {
+    const user = userEvent.setup();
+    const mock = createMockBridge();
+    await renderReadyApp(mock);
+    await act(async () => {
+      mock.emitStatus({ id: "panel", state: "running", pid: 23333, startedAt: 1700000000000 });
+    });
+
+    await user.click(screen.getByRole("button", { name: en["settings.title"] }));
+    const input = within(screen.getByTestId("service-settings-panel")).getByLabelText(
+      en["settings.readyPort"],
+    );
+    await user.clear(input);
+    await user.type(input, "25555");
+    await user.click(screen.getByRole("button", { name: en["settings.save"] }));
+
+    await waitFor(() => {
+      expect(mock.calls).toContainEqual({ name: "probeTcp", args: ["127.0.0.1", 25555, 1000] });
+    });
   });
 
   it("console ring cap honored end to end", async () => {
