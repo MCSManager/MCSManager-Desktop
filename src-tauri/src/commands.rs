@@ -14,6 +14,7 @@ pub struct AppState {
     pub manager: Arc<RwLock<ProcessManager>>,
     pub config: Arc<Mutex<AppConfig>>,
     pub config_path: PathBuf,
+    pub startup_warnings: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -144,7 +145,8 @@ where
 #[tauri::command]
 pub fn get_config(state: State<'_, AppState>) -> ConfigResponse {
     let config = lock_config(&state.config).clone();
-    let warnings = config.path_issues();
+    let mut warnings = state.startup_warnings.clone();
+    warnings.extend(config.path_issues());
     ConfigResponse { config, warnings }
 }
 

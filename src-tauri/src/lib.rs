@@ -26,11 +26,11 @@ pub fn run() {
         .setup(|app| {
             let config_path = app.path().app_config_dir()?.join("config.json");
             let outcome = config::load_from(&config_path)?;
-            if outcome.recovered {
-                if let Some(error) = &outcome.error {
-                    eprintln!("config recovered from invalid file: {}", error);
-                }
-            }
+            let startup_warnings: Vec<String> = outcome
+                .error
+                .iter()
+                .map(|error| format!("config recovered from invalid file: {}", error))
+                .collect();
             let app_config = outcome.config;
             let sink = commands::make_event_sink(app.handle().clone());
             let mut manager = ProcessManager::new(
@@ -44,6 +44,7 @@ pub fn run() {
                 manager: Arc::new(RwLock::new(manager)),
                 config: Arc::new(Mutex::new(app_config)),
                 config_path,
+                startup_warnings,
             });
             Ok(())
         })

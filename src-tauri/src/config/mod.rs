@@ -45,7 +45,10 @@ pub fn load_from(path: &Path) -> Result<LoadOutcome, ConfigError> {
             error: None,
         }),
         Err(error) => {
-            backup_file(path)?;
+            let error = match backup_file(path) {
+                Ok(()) => error,
+                Err(backup_error) => format!("{}; additionally the backup copy failed: {}", error, backup_error),
+            };
             Ok(LoadOutcome {
                 config: AppConfig::default(),
                 recovered: true,
@@ -225,6 +228,26 @@ mod tests {
             std::fs::read_to_string(&backup).expect("read backup"),
             "{not json"
         );
+
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn load_tolerates_backup_failure() {
+        let dir = unique_temp_dir();
+        let path = dir.join("config.json");
+        std::fs::write(&path, "{not json").expect("write corrupt file");
+        std::fs::create_dir(dir.join("config.json.bak")).expect("block the backup path");
+
+        let outcome = load_from(&path).expect("load must not hard-fail on backup I/O");
+        assert!(outcome.recovered);
+        let error = outcome.error.expect("recovery error recorded");
+        assert!(
+            error.contains("failed to back up"),
+            "error must mention the backup failure: {}",
+            error
+        );
+        assert_eq!(outcome.config, AppConfig::default());
 
         cleanup(&dir);
     }
