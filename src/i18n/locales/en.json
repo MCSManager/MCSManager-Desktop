@@ -33,6 +33,7 @@
   "settings.title": "Settings",
   "settings.general": "General",
   "settings.services": "Services",
+  "settings.language": "Language",
   "settings.nodePath": "Node.js path",
   "settings.panelUrl": "Panel URL",
   "settings.stopTimeout": "Stop timeout (seconds)",

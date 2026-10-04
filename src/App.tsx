@@ -4,6 +4,7 @@ import { BrowserTab } from "./components/browser/BrowserTab";
 import { Dashboard } from "./components/dashboard/Dashboard";
 import { TopBar } from "./components/layout/TopBar";
 import type { TabId } from "./components/layout/TabBar";
+import { SettingsModal } from "./components/settings/SettingsModal";
 import { useConfig } from "./hooks/useConfig";
 import { useServices } from "./hooks/useServices";
 import { openExternal } from "./services/openExternal";
@@ -15,7 +16,7 @@ function AppShell() {
   const [tab, setTab] = useState<TabId>("dashboard");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const { statuses, start, startAll, stopAll } = useServices();
-  const { config } = useConfig();
+  const { config, warnings, saving, error, save } = useConfig();
   const busy = Object.values(statuses).some(
     (status) => status.state === "starting" || status.state === "stopping",
   );
@@ -44,7 +45,15 @@ function AppShell() {
           />
         )}
       </main>
-      {settingsOpen ? <div data-testid="settings-placeholder" /> : null}
+      <SettingsModal
+        open={settingsOpen}
+        config={config}
+        warnings={warnings}
+        saving={saving}
+        error={error}
+        onSave={save}
+        onClose={() => setSettingsOpen(false)}
+      />
     </div>
   );
 }

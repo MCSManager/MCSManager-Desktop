@@ -33,6 +33,7 @@
   "settings.title": "设置",
   "settings.general": "通用",
   "settings.services": "服务",
+  "settings.language": "语言",
   "settings.nodePath": "Node.js 路径",
   "settings.panelUrl": "面板地址",
   "settings.stopTimeout": "停止超时（秒）",

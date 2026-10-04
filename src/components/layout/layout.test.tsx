@@ -56,7 +56,7 @@ describe("layout", () => {
     const user = userEvent.setup();
     render(<App bridge={createMockBridge()} />);
     await user.click(screen.getByRole("button", { name: en["settings.title"] }));
-    expect(screen.getByTestId("settings-placeholder")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: en["settings.title"] })).toBeInTheDocument();
   });
 
   it("switches tab content between dashboard and browser", async () => {
