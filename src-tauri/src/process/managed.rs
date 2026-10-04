@@ -51,7 +51,7 @@ pub struct ManagedProcess {
 }
 
 const POLL_INTERVAL: Duration = Duration::from_millis(25);
-const KILL_GRACE: Duration = Duration::from_secs(5);
+const KILL_GRACE: Duration = Duration::from_secs(15);
 const FORCE_KILL_MESSAGE: &str = "Stop timeout exceeded; process tree was force-killed.";
 
 fn lock_state(shared: &Mutex<ProcState>) -> MutexGuard<'_, ProcState> {
