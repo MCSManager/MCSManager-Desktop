@@ -55,6 +55,7 @@ export function Dashboard() {
           lines={outputs.daemon ?? EMPTY_LINES}
           ready={daemonRunning && daemonPort != null ? daemonReady : null}
           busy={isBusy(daemonStatus)}
+          enabled={config?.services.daemon.enabled ?? true}
           onAction={(action) => runAction("daemon", action)}
         />
         <ServiceCard
@@ -63,6 +64,7 @@ export function Dashboard() {
           lines={outputs.panel ?? EMPTY_LINES}
           ready={panelRunning && panelPort != null ? panelReady : null}
           busy={isBusy(panelStatus)}
+          enabled={config?.services.panel.enabled ?? true}
           onAction={(action) => runAction("panel", action)}
         />
       </div>

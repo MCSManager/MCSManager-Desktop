@@ -25,6 +25,7 @@
   "status.uptime": "Uptime: {uptime}",
   "status.ready": "Ready",
   "status.notReady": "Not ready",
+  "status.disabled": "Disabled",
   "status.exitCode": "Exit code: {exitCode}",
   "browser.refresh": "Refresh",
   "browser.openExternal": "Open in browser",

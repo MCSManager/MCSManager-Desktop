@@ -342,6 +342,11 @@ button {
   color: var(--text-dim);
 }
 
+.badge--disabled {
+  color: var(--text-dim);
+  border-style: dashed;
+}
+
 .badge--starting,
 .badge--stopping {
   color: var(--warning);

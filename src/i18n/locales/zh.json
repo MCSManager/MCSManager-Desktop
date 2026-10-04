@@ -25,6 +25,7 @@
   "status.uptime": "运行时间：{uptime}",
   "status.ready": "就绪",
   "status.notReady": "未就绪",
+  "status.disabled": "已禁用",
   "status.exitCode": "退出码：{exitCode}",
   "browser.refresh": "刷新",
   "browser.openExternal": "在浏览器中打开",

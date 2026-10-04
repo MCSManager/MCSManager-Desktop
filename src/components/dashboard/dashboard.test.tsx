@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { act, cleanup, render, screen, within } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import App from "../../App";
 import en from "../../i18n/locales/en.json";
@@ -103,5 +103,28 @@ describe("dashboard", () => {
     expect(
       within(card).getByText(en["status.exitCode"].replace("{exitCode}", "3")),
     ).toBeInTheDocument();
+  });
+
+  it("start_all_skips_disabled_services", async () => {
+    const user = userEvent.setup();
+    const mock = createMockBridge();
+    mock.config.services.daemon.enabled = false;
+    renderApp(mock);
+    await act(async () => {});
+
+    const daemonCard = screen.getByTestId("service-card-daemon");
+    expect(within(daemonCard).getByText(en["status.disabled"])).toBeInTheDocument();
+    expect(within(daemonCard).getByRole("button", { name: en["action.start"] })).toBeDisabled();
+    expect(within(daemonCard).getByRole("button", { name: en["action.restart"] })).toBeDisabled();
+
+    const panelCard = screen.getByTestId("service-card-panel");
+    expect(within(panelCard).queryByText(en["status.disabled"])).not.toBeInTheDocument();
+    expect(within(panelCard).getByRole("button", { name: en["action.start"] })).toBeEnabled();
+
+    await user.click(screen.getByRole("button", { name: en["action.startAll"] }));
+    await waitFor(() => {
+      expect(mock.calls).toContainEqual({ name: "startAll", args: [] });
+    });
+    expect(mock.calls).not.toContainEqual({ name: "startService", args: ["daemon"] });
   });
 });

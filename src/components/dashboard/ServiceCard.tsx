@@ -14,6 +14,7 @@ export interface ServiceCardProps {
   ready: boolean | null;
   onAction: (action: ActionKind) => void;
   busy: boolean;
+  enabled: boolean;
 }
 
 function formatHms(ms: number): string {
@@ -24,7 +25,15 @@ function formatHms(ms: number): string {
   return `${hours}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
-export function ServiceCard({ serviceId, status, lines, ready, onAction, busy }: ServiceCardProps) {
+export function ServiceCard({
+  serviceId,
+  status,
+  lines,
+  ready,
+  onAction,
+  busy,
+  enabled,
+}: ServiceCardProps) {
   const { t } = useI18n();
   const { clearOutput } = useServices();
   const { state, pid, startedAt, exitCode } = status;
@@ -71,12 +80,13 @@ export function ServiceCard({ serviceId, status, lines, ready, onAction, busy }:
             {ready ? t("status.ready") : t("status.notReady")}
           </span>
         ) : null}
+        {enabled ? null : <span className="badge badge--disabled">{t("status.disabled")}</span>}
       </div>
       <div className="card-actions">
         <ActionButton
           kind="start"
           busy={busy}
-          disabled={state === "running" || state === "starting"}
+          disabled={!enabled || state === "running" || state === "starting"}
           onClick={() => onAction("start")}
         />
         <ActionButton
@@ -88,7 +98,7 @@ export function ServiceCard({ serviceId, status, lines, ready, onAction, busy }:
         <ActionButton
           kind="restart"
           busy={busy}
-          disabled={state !== "running"}
+          disabled={!enabled || state !== "running"}
           onClick={() => onAction("restart")}
         />
       </div>
