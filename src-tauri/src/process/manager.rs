@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use std::thread;
 use std::time::Duration;
 
-use super::events::{EventSink, ProcessEvent, ProcessSpec, ServiceStatus};
+use super::events::{EventSink, ProcessEvent, ProcessSpec, ServiceState, ServiceStatus};
 use super::managed::{ManagedProcess, ProcState, ProcessError};
 
 pub struct ProcessManager {
@@ -25,6 +25,13 @@ fn lock_state(state: &Mutex<ProcState>) -> MutexGuard<'_, ProcState> {
     state
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+fn is_real_error(error: &ProcessError) -> bool {
+    matches!(
+        error,
+        ProcessError::Spawn(_) | ProcessError::Io(_) | ProcessError::NotFound(_)
+    )
 }
 
 fn status_from_handle(state: &Mutex<ProcState>, id: &str) -> ServiceStatus {
@@ -51,6 +58,15 @@ impl ProcessManager {
         }
     }
 
+    fn insert_entry(&mut self, spec: ProcessSpec) {
+        let id = spec.id.clone();
+        let managed = ManagedProcess::new(spec.clone(), Arc::clone(&self.sink), self.stop_timeout);
+        let state = managed.status_handle();
+        self.processes.insert(id.clone(), Arc::new(Mutex::new(managed)));
+        self.states.insert(id.clone(), state);
+        self.specs.insert(id, spec);
+    }
+
     pub fn register(&mut self, spec: ProcessSpec) -> Result<(), ProcessError> {
         if self.processes.contains_key(&spec.id) {
             return Err(ProcessError::Duplicate(format!(
@@ -58,13 +74,29 @@ impl ProcessManager {
                 spec.id
             )));
         }
-        let id = spec.id.clone();
-        let managed = ManagedProcess::new(spec.clone(), Arc::clone(&self.sink), self.stop_timeout);
-        let state = managed.status_handle();
-        self.processes.insert(id.clone(), Arc::new(Mutex::new(managed)));
-        self.states.insert(id.clone(), state);
-        self.specs.insert(id.clone(), spec);
-        self.order.push(id);
+        self.order.push(spec.id.clone());
+        self.insert_entry(spec);
+        Ok(())
+    }
+
+    pub fn register_or_update(&mut self, spec: ProcessSpec) -> Result<(), ProcessError> {
+        if !self.processes.contains_key(&spec.id) {
+            return self.register(spec);
+        }
+        let current = {
+            let state = self
+                .states
+                .get(&spec.id)
+                .expect("processes and states in sync");
+            lock_state(state).state
+        };
+        if !matches!(current, ServiceState::Stopped | ServiceState::Error) {
+            return Err(ProcessError::InvalidState(format!(
+                "cannot replace service \"{}\" while state is {:?}",
+                spec.id, current
+            )));
+        }
+        self.insert_entry(spec);
         Ok(())
     }
 
@@ -72,6 +104,18 @@ impl ProcessManager {
         self.processes
             .get(id)
             .ok_or_else(|| ProcessError::NotFound(format!("service not found: {}", id)))
+    }
+
+    fn is_startable(&self, id: &str) -> bool {
+        self.states
+            .get(id)
+            .map(|state| {
+                matches!(
+                    lock_state(state).state,
+                    ServiceState::Stopped | ServiceState::Error
+                )
+            })
+            .unwrap_or(false)
     }
 
     pub fn start(&self, id: &str) -> Result<(), ProcessError> {
@@ -101,8 +145,11 @@ impl ProcessManager {
                 .unwrap_or(0);
             let process = Arc::clone(self.process_for(id).expect("order and processes in sync"));
             if delay_ms == 0 {
+                if !self.is_startable(id) {
+                    continue;
+                }
                 if let Err(error) = lock_process(&process).start() {
-                    if first_error.is_none() {
+                    if first_error.is_none() && is_real_error(&error) {
                         first_error = Some(error);
                     }
                 }
@@ -112,10 +159,12 @@ impl ProcessManager {
                 thread::spawn(move || {
                     thread::sleep(Duration::from_millis(delay_ms));
                     if let Err(error) = lock_process(&process).start() {
-                        sink(ProcessEvent::Error {
-                            id,
-                            message: error.to_string(),
-                        });
+                        if is_real_error(&error) {
+                            sink(ProcessEvent::Error {
+                                id,
+                                message: error.to_string(),
+                            });
+                        }
                     }
                 });
             }
@@ -385,6 +434,124 @@ mod tests {
             vec![old_pid.unwrap(), new_pid.unwrap()],
             "old child must be gone and only the replacement left running"
         );
+        manager.shutdown();
+    }
+
+    fn is_error(manager: &ProcessManager, id: &str) -> bool {
+        manager
+            .status(id)
+            .map(|status| status.state == ServiceState::Error)
+            .unwrap_or(false)
+    }
+
+    #[test]
+    fn start_all_skips_already_running_services() {
+        let (sink, _events) = make_sink();
+        let mut manager = ProcessManager::new(sink, Duration::from_millis(300));
+        manager
+            .register(make_spec("skip-up", LONG_RUN, 0))
+            .expect("register up");
+        manager
+            .register(make_spec("skip-down", LONG_RUN, 0))
+            .expect("register down");
+        manager.start("skip-up").expect("start up");
+        let up = wait_until(Duration::from_secs(2), || is_running(&manager, "skip-up"));
+        assert!(up, "first service must be Running before start_all");
+        let pid_before = manager.status("skip-up").expect("status").pid;
+        manager
+            .start_all()
+            .expect("start_all must skip the already-running service without error");
+        let both_up = wait_until(Duration::from_secs(2), || {
+            is_running(&manager, "skip-up") && is_running(&manager, "skip-down")
+        });
+        assert!(
+            both_up,
+            "the stopped service should start and the running one stay up"
+        );
+        assert_eq!(
+            manager.status("skip-up").expect("status").pid,
+            pid_before,
+            "the already-running service must be left untouched"
+        );
+        manager.shutdown();
+    }
+
+    #[test]
+    fn register_or_update_replaces_when_stopped() {
+        let (sink, _events) = make_sink();
+        let mut manager = ProcessManager::new(sink, Duration::from_millis(300));
+        manager
+            .register(make_spec("replace-a", LONG_RUN, 0))
+            .expect("register a");
+        manager
+            .register(make_spec("replace-b", LONG_RUN, 0))
+            .expect("register b");
+        manager.start("replace-a").expect("start a");
+        let started = wait_until(Duration::from_secs(2), || is_running(&manager, "replace-a"));
+        assert!(
+            started,
+            "service must be Running before it is stopped for replacement"
+        );
+        manager.stop("replace-a").expect("stop a");
+        let stopped = wait_until(Duration::from_secs(2), || is_stopped(&manager, "replace-a"));
+        assert!(
+            stopped,
+            "service must be Stopped before the replacement happens"
+        );
+        let old = manager.status("replace-a").expect("status before replace");
+        assert!(
+            old.pid.is_some(),
+            "the old entry must show run residue before the replacement"
+        );
+
+        manager
+            .register_or_update(make_spec("replace-a", "process.exit(3)", 0))
+            .expect("replace while Stopped succeeds");
+        let fresh = manager.status("replace-a").expect("status after replace");
+        assert_eq!(fresh.state, ServiceState::Stopped);
+        assert_eq!(fresh.pid, None);
+        assert_eq!(fresh.started_at, None);
+        assert_eq!(fresh.exit_code, None);
+        assert_eq!(fresh.error, None);
+        let ids: Vec<String> = manager.statuses().iter().map(|s| s.id.clone()).collect();
+        assert_eq!(
+            ids,
+            vec!["replace-a".to_string(), "replace-b".to_string()],
+            "registration order must be preserved across the replacement"
+        );
+
+        manager.start("replace-a").expect("start replaced entry");
+        let replaced = wait_until(Duration::from_secs(2), || is_error(&manager, "replace-a"));
+        assert!(
+            replaced,
+            "the replaced entry must run the new spec (exit 3 reaches Error)"
+        );
+        manager.shutdown();
+    }
+
+    #[test]
+    fn register_or_update_rejects_when_running() {
+        let (sink, _events) = make_sink();
+        let mut manager = ProcessManager::new(sink, Duration::from_millis(300));
+        manager
+            .register(make_spec("busy", LONG_RUN, 0))
+            .expect("register succeeds");
+        manager.start("busy").expect("start succeeds");
+        let started = wait_until(Duration::from_secs(2), || is_running(&manager, "busy"));
+        assert!(
+            started,
+            "service should be Running before the update attempt"
+        );
+        let pid_before = manager.status("busy").expect("status").pid;
+        let err = manager
+            .register_or_update(make_spec("busy", "process.exit(3)", 0))
+            .expect_err("update while Running must fail");
+        assert!(matches!(err, ProcessError::InvalidState(_)), "got {:?}", err);
+        assert!(
+            is_running(&manager, "busy"),
+            "the running entry must be left alone"
+        );
+        assert_eq!(manager.status("busy").expect("status").pid, pid_before);
         manager.shutdown();
     }
 

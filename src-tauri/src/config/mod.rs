@@ -1,8 +1,5 @@
-#![allow(dead_code)]
-
 mod model;
 
-#[allow(unused_imports)]
 pub use model::{AppConfig, ConfigError, Language, ServiceConfig};
 
 use std::path::Path;
