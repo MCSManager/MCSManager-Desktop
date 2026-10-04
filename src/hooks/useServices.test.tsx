@@ -1,7 +1,8 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { StrictMode, type ReactNode } from "react";
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { BridgeProvider, type Bridge } from "../services/bridge";
+import { resetServicesStore } from "../state/serviceStore";
 import { createMockBridge } from "../test/mockBridge";
 import type { ServiceStatus } from "../types";
 import { useServices } from "./useServices";
@@ -17,6 +18,10 @@ function wrapperFor(bridge: Bridge) {
 }
 
 describe("useServices", () => {
+  beforeEach(() => {
+    resetServicesStore();
+  });
+
   afterEach(() => {
     cleanup();
   });
@@ -95,5 +100,42 @@ describe("useServices", () => {
     }).not.toThrow();
     expect(active).toBe(0);
     expect(seen).toHaveLength(1);
+  });
+
+  it("useServices hydrates from getStatuses on mount", async () => {
+    const running: ServiceStatus = { id: "hydrate", state: "running", pid: 111 };
+    const mock = createMockBridge({
+      getStatuses: vi.fn(() => Promise.resolve([running])),
+    });
+    const { result } = renderHook(() => useServices(), { wrapper: wrapperFor(mock) });
+    await act(async () => {});
+
+    expect(mock.calls.some((call) => call.name === "getStatuses")).toBe(true);
+    expect(result.current.statuses["hydrate"].state).toBe("running");
+    expect(result.current.statuses["hydrate"].pid).toBe(111);
+
+    const failing = createMockBridge({
+      getStatuses: vi.fn(() => Promise.reject(new Error("init down"))),
+    });
+    const failed = renderHook(() => useServices(), { wrapper: wrapperFor(failing) });
+    await act(async () => {});
+    expect(failed.result.current.actionError).toBeNull();
+  });
+
+  it("store is shared across useServices consumers", async () => {
+    const mock = createMockBridge();
+    const first = renderHook(() => useServices(), { wrapper: wrapperFor(mock) });
+    const second = renderHook(() => useServices(), { wrapper: wrapperFor(mock) });
+    await act(async () => {});
+
+    act(() => {
+      mock.emitOutput({ id: "shared", stream: "stdout", line: "once", timestamp: 1 });
+    });
+
+    const fromFirst = first.result.current.outputs["shared"];
+    const fromSecond = second.result.current.outputs["shared"];
+    expect(fromFirst).toHaveLength(1);
+    expect(fromFirst[0].text).toBe("once");
+    expect(fromSecond).toBe(fromFirst);
   });
 });

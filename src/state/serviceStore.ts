@@ -73,3 +73,16 @@ export function createServicesStore(maxLines: number): ServicesStore {
     },
   };
 }
+
+let sharedStore: ServicesStore | null = null;
+
+export function getServicesStore(maxLines = 2000): ServicesStore {
+  if (!sharedStore) {
+    sharedStore = createServicesStore(maxLines);
+  }
+  return sharedStore;
+}
+
+export function resetServicesStore(): void {
+  sharedStore = null;
+}

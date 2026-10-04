@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
-import { useBridge } from "../services/bridge";
+import { useBridge, type Bridge } from "../services/bridge";
 import type { ConsoleLine } from "../state/consoleBuffer";
-import { createServicesStore, type ServicesState, type ServicesStore } from "../state/serviceStore";
+import { getServicesStore, type ServicesState, type ServicesStore } from "../state/serviceStore";
 
 export interface UseServicesResult {
   statuses: ServicesState["statuses"];
@@ -19,25 +19,51 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-export function useServices(maxLines = 2000): UseServicesResult {
-  const bridge = useBridge();
-  const [store] = useState<ServicesStore>(() => createServicesStore(maxLines));
-  const [actionError, setActionError] = useState<string | null>(null);
+let wireCount = 0;
+let teardown: (() => void) | null = null;
 
-  const state = useSyncExternalStore(store.subscribe, store.getState, store.getState);
-  const { statuses, outputs } = state;
-
-  useEffect(() => {
+function wireBridge(bridge: Bridge, store: ServicesStore): () => void {
+  wireCount += 1;
+  if (wireCount === 1) {
     const unlisten = [
       bridge.onStatus((s) => store.applyStatus(s)),
       bridge.onOutput((o) => store.applyOutput(o)),
       bridge.onError((e) => store.applyError(e)),
     ];
-    return () => {
+    teardown = () => {
       for (const un of unlisten) {
         un();
       }
     };
+  }
+  return () => {
+    wireCount -= 1;
+    if (wireCount === 0 && teardown) {
+      teardown();
+      teardown = null;
+    }
+  };
+}
+
+export function useServices(maxLines = 2000): UseServicesResult {
+  const bridge = useBridge();
+  const store = getServicesStore(maxLines);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const state = useSyncExternalStore(store.subscribe, store.getState, store.getState);
+  const { statuses, outputs } = state;
+
+  useEffect(() => wireBridge(bridge, store), [bridge, store]);
+
+  useEffect(() => {
+    void bridge.getStatuses().then(
+      (list) => {
+        for (const status of list) {
+          store.applyStatus(status);
+        }
+      },
+      () => {},
+    );
   }, [bridge, store]);
 
   const run = useCallback(async (action: () => Promise<void>) => {
