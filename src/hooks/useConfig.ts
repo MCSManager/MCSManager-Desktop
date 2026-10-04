@@ -22,7 +22,11 @@ export function useConfig(): UseConfigResult {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const { config, warnings } = useSyncExternalStore(store.subscribe, store.getState, store.getState);
+  const { config, warnings } = useSyncExternalStore(
+    store.subscribe,
+    store.getState,
+    store.getState,
+  );
 
   const reload = useCallback(async () => {
     try {
@@ -35,8 +39,16 @@ export function useConfig(): UseConfigResult {
   }, [bridge, store]);
 
   useEffect(() => {
-    void reload();
-  }, [reload]);
+    void bridge.getConfig().then(
+      (response) => {
+        store.applyLoaded(response);
+        setError(null);
+      },
+      (loadError: unknown) => {
+        setError(errorMessage(loadError));
+      },
+    );
+  }, [bridge, store]);
 
   const save = useCallback(
     async (next: AppConfig) => {
