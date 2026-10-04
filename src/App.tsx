@@ -1,49 +1,46 @@
 import { useState } from "react";
-import reactLogo from "./assets/react.svg";
-import "./App.css";
+import { I18nProvider } from "./i18n";
+import { TopBar } from "./components/layout/TopBar";
+import type { TabId } from "./components/layout/TabBar";
+import { useServices } from "./hooks/useServices";
+import { BridgeProvider, bridge as realBridge, type Bridge } from "./services/bridge";
 
-function App() {
-  const [greetMsg, setGreetMsg] = useState("");
-  const [name, setName] = useState("");
-
-  function greet() {
-    setGreetMsg(`Hello, ${name}!`);
-  }
+function AppShell() {
+  const [tab, setTab] = useState<TabId>("dashboard");
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const { statuses, startAll, stopAll } = useServices();
+  const busy = Object.values(statuses).some(
+    (status) => status.state === "starting" || status.state === "stopping",
+  );
 
   return (
-    <main className="container">
-      <h1>Welcome to Tauri + React</h1>
-
-      <div className="row">
-        <a href="https://vite.dev" target="_blank">
-          <img src="/vite.svg" className="logo vite" alt="Vite logo" />
-        </a>
-        <a href="https://tauri.app" target="_blank">
-          <img src="/tauri.svg" className="logo tauri" alt="Tauri logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <p>Click on the Tauri, Vite, and React logos to learn more.</p>
-
-      <form
-        className="row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          greet();
-        }}
-      >
-        <input
-          id="greet-input"
-          onChange={(e) => setName(e.currentTarget.value)}
-          placeholder="Enter a name..."
-        />
-        <button type="submit">Greet</button>
-      </form>
-      <p>{greetMsg}</p>
-    </main>
+    <div className="app-shell">
+      <TopBar
+        activeTab={tab}
+        onTabChange={setTab}
+        onStartAll={() => void startAll()}
+        onStopAll={() => void stopAll()}
+        onOpenSettings={() => setSettingsOpen(true)}
+        busy={busy}
+      />
+      <main className="app-main">
+        {tab === "dashboard" ? (
+          <div data-testid="dashboard-placeholder" />
+        ) : (
+          <div data-testid="browser-placeholder" />
+        )}
+      </main>
+      {settingsOpen ? <div data-testid="settings-placeholder" /> : null}
+    </div>
   );
 }
 
-export default App;
+export default function App({ bridge: injected }: { bridge?: Bridge }) {
+  return (
+    <BridgeProvider bridge={injected ?? realBridge}>
+      <I18nProvider>
+        <AppShell />
+      </I18nProvider>
+    </BridgeProvider>
+  );
+}
