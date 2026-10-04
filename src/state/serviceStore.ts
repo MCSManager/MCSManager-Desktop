@@ -1,4 +1,5 @@
 import type { OutputLine, ServiceStatus } from "../types";
+import { resetBridgeWiring } from "./bridgeWiring";
 import { appendLine, clearLines, type ConsoleLine } from "./consoleBuffer";
 
 export interface ServicesState {
@@ -84,5 +85,6 @@ export function getServicesStore(maxLines = 2000): ServicesStore {
 }
 
 export function resetServicesStore(): void {
+  resetBridgeWiring();
   sharedStore = null;
 }

@@ -138,4 +138,28 @@ describe("useServices", () => {
     expect(fromFirst[0].text).toBe("once");
     expect(fromSecond).toBe(fromFirst);
   });
+
+  it("resetServicesStore rewires a fresh mount after a leaked one", async () => {
+    const leaked = createMockBridge();
+    const leakedView = renderHook(() => useServices(), { wrapper: wrapperFor(leaked) });
+    await act(async () => {});
+
+    resetServicesStore();
+
+    const fresh = createMockBridge();
+    const { result, unmount } = renderHook(() => useServices(), { wrapper: wrapperFor(fresh) });
+    await act(async () => {});
+
+    act(() => {
+      fresh.emitStatus({ id: "panel", state: "running", pid: 9 });
+    });
+    expect(result.current.statuses["panel"]?.state).toBe("running");
+
+    leakedView.unmount();
+    act(() => {
+      fresh.emitStatus({ id: "panel", state: "stopped" });
+    });
+    expect(result.current.statuses["panel"]?.state).toBe("stopped");
+    unmount();
+  });
 });
