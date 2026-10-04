@@ -15,8 +15,8 @@ const DEFAULT_PANEL_URL = "http://localhost:23333";
 function AppShell() {
   const [tab, setTab] = useState<TabId>("dashboard");
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const { statuses, start, startAll, stopAll } = useServices();
   const { config, warnings, saving, error, save } = useConfig();
+  const { statuses, start, startAll, stopAll } = useServices(config?.maxLogLines ?? 2000);
   const busy = Object.values(statuses).some(
     (status) => status.state === "starting" || status.state === "stopping",
   );

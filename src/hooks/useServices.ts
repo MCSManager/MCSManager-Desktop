@@ -20,15 +20,21 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-export function useServices(maxLines = 2000): UseServicesResult {
+export function useServices(maxLines?: number): UseServicesResult {
   const bridge = useBridge();
-  const store = getServicesStore(maxLines);
+  const store = getServicesStore(maxLines ?? 2000);
   const [actionError, setActionError] = useState<string | null>(null);
 
   const state = useSyncExternalStore(store.subscribe, store.getState, store.getState);
   const { statuses, outputs } = state;
 
   useEffect(() => wireBridge(bridge, store), [bridge, store]);
+
+  useEffect(() => {
+    if (maxLines !== undefined) {
+      store.setMaxLines(maxLines);
+    }
+  }, [store, maxLines]);
 
   useEffect(() => {
     void bridge.getStatuses().then(

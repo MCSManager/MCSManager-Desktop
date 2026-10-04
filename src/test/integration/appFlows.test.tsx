@@ -173,4 +173,21 @@ describe("app integration flows", () => {
     expect(within(card).queryByText("line-0")).not.toBeInTheDocument();
     expect(within(card).getByText("line-2099")).toBeInTheDocument();
   });
+
+  it("console ring cap follows configured maxLogLines", async () => {
+    const mock = createMockBridge();
+    mock.config.maxLogLines = 5;
+    await renderReadyApp(mock);
+
+    await act(async () => {
+      for (let i = 0; i < 10; i += 1) {
+        mock.emitOutput({ id: "daemon", stream: "stdout", line: `cap-${i}`, timestamp: i });
+      }
+    });
+
+    const card = screen.getByTestId("service-card-daemon");
+    const rendered = card.querySelectorAll(".console-line");
+    expect(rendered.length).toBeLessThanOrEqual(5);
+    expect(within(card).getByText("cap-9")).toBeInTheDocument();
+  });
 });
