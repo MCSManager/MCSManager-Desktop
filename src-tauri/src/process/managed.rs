@@ -33,13 +33,13 @@ impl std::fmt::Display for ProcessError {
 
 impl std::error::Error for ProcessError {}
 
-struct ProcState {
-    state: ServiceState,
-    pid: Option<u32>,
-    started_at: Option<u64>,
-    exit_code: Option<i32>,
-    error: Option<String>,
-    stop_requested: bool,
+pub struct ProcState {
+    pub state: ServiceState,
+    pub pid: Option<u32>,
+    pub started_at: Option<u64>,
+    pub exit_code: Option<i32>,
+    pub error: Option<String>,
+    pub stop_requested: bool,
 }
 
 pub struct ManagedProcess {
@@ -58,17 +58,13 @@ fn lock_state(shared: &Mutex<ProcState>) -> MutexGuard<'_, ProcState> {
     shared.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
+// Script path iff it has a path separator or a .js/.cjs/.mjs suffix (ASCII case-insensitive); inline payloads skip the file check.
 fn looks_like_script_path(arg: &str) -> bool {
-    if arg.is_empty() {
-        return false;
-    }
     if arg.contains('/') || arg.contains('\\') {
         return true;
     }
-    match Path::new(arg).extension().and_then(|ext| ext.to_str()) {
-        Some(ext) => !ext.is_empty() && ext.chars().all(|c| c.is_ascii_alphanumeric()),
-        None => false,
-    }
+    let lower = arg.to_ascii_lowercase();
+    lower.ends_with(".js") || lower.ends_with(".cjs") || lower.ends_with(".mjs")
 }
 
 fn spawn_reader<R: Read + Send + 'static>(
@@ -163,6 +159,10 @@ impl ManagedProcess {
             exit_code: state.exit_code,
             error: state.error.clone(),
         }
+    }
+
+    pub fn status_handle(&self) -> Arc<Mutex<ProcState>> {
+        Arc::clone(&self.shared)
     }
 
     pub fn start(&mut self) -> Result<(), ProcessError> {
@@ -545,6 +545,82 @@ mod tests {
         assert!(matches!(err, ProcessError::Spawn(_)), "got {:?}", err);
         assert_eq!(managed.status().state, ServiceState::Stopped);
         managed.stop().expect("stop after failed start is a no-op");
+    }
+
+    #[test]
+    fn script_path_classifier_boundary() {
+        assert!(looks_like_script_path("app.js"));
+        assert!(looks_like_script_path("APP.JS"));
+        assert!(looks_like_script_path("lib/app.cjs"));
+        assert!(looks_like_script_path("main.mjs"));
+        assert!(looks_like_script_path("bin/start"));
+        assert!(!looks_like_script_path("console.log(1.5)"));
+        assert!(!looks_like_script_path("x = 1.5"));
+        assert!(!looks_like_script_path("--max-old-space-size=8192"));
+
+        let (sink, _events) = make_sink();
+        for (id, code) in [("t8a", "x = 1.5"), ("t8b", "console.log(1.5)")] {
+            let spec = make_spec(id, code);
+            let mut managed = ManagedProcess::new(spec, sink.clone(), Duration::from_millis(300));
+            managed
+                .start()
+                .expect("inline -e code containing a dot must skip script file validation");
+            let exited = wait_until(Duration::from_secs(5), || {
+                managed.status().state == ServiceState::Stopped
+            });
+            assert!(exited, "inline child should finish on its own");
+            managed.stop().expect("stop after exit is a no-op");
+        }
+        for script in ["definitely-missing-script.js", "definitely-missing-script.JS"] {
+            let spec = ProcessSpec {
+                args: vec![script.to_string()],
+                ..make_spec("t8c", "")
+            };
+            let mut managed = ManagedProcess::new(spec, sink.clone(), Duration::from_millis(300));
+            let err = managed
+                .start()
+                .expect_err("a .js script path must be validated against working_dir");
+            assert!(matches!(err, ProcessError::Spawn(_)), "got {:?}", err);
+            managed.stop().expect("stop after failed start is a no-op");
+        }
+    }
+
+    fn status_from_handle(handle: &Arc<Mutex<ProcState>>, id: &str) -> ServiceStatus {
+        let state = lock_state(handle);
+        ServiceStatus {
+            id: id.to_string(),
+            state: state.state,
+            pid: state.pid,
+            started_at: state.started_at,
+            exit_code: state.exit_code,
+            error: state.error.clone(),
+        }
+    }
+
+    #[test]
+    fn status_handle_matches_status_and_stays_live() {
+        let (sink, _events) = make_sink();
+        let spec = make_spec("t9", "process.exit(3)");
+        let mut managed = ManagedProcess::new(spec, sink, Duration::from_millis(300));
+        managed.start().expect("start succeeds");
+        let handle = managed.status_handle();
+        assert!(Arc::ptr_eq(&handle, &managed.status_handle()));
+        assert_eq!(
+            managed.status(),
+            status_from_handle(&handle, managed.id())
+        );
+        let failed = wait_until(Duration::from_secs(5), || {
+            lock_state(&handle).state == ServiceState::Error
+        });
+        assert!(
+            failed,
+            "status handle must observe supervisor updates without the lifecycle lock"
+        );
+        let via_handle = status_from_handle(&handle, managed.id());
+        assert_eq!(via_handle.state, ServiceState::Error);
+        assert_eq!(via_handle.exit_code, Some(3));
+        assert_eq!(managed.status(), via_handle);
+        managed.stop().expect("stop after error is a no-op");
     }
 
     #[test]
