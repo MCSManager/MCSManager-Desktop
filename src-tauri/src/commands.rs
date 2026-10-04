@@ -112,6 +112,9 @@ pub(crate) fn build_spec(id: &str, config: &AppConfig) -> Result<ProcessSpec, St
         .services
         .get(id)
         .ok_or_else(|| format!("service not found in config: {}", id))?;
+    if !service.enabled {
+        return Err(format!("service is disabled: {}", id));
+    }
     Ok(make_spec(id, service, &config.node_path))
 }
 
@@ -230,6 +233,7 @@ pub async fn start_all_services(state: State<'_, AppState>) -> Result<(), String
     let config = Arc::clone(&state.config);
     run_blocking(move || {
         let specs = enabled_specs(&lock_config(&config));
+        let ids: Vec<String> = specs.iter().map(|spec| spec.id.clone()).collect();
         {
             let mut manager = write_manager(&manager);
             for spec in specs {
@@ -237,7 +241,7 @@ pub async fn start_all_services(state: State<'_, AppState>) -> Result<(), String
             }
         }
         read_manager(&manager)
-            .start_all()
+            .start_only(&ids)
             .map_err(|error| error.to_string())
     })
     .await
@@ -303,6 +307,23 @@ mod tests {
         let listener = TcpListener::bind("127.0.0.1:0").expect("bind ephemeral port");
         let port = listener.local_addr().expect("local addr").port();
         assert!(probe_tcp("127.0.0.1".to_string(), port, 1000));
+    }
+
+    #[test]
+    fn build_spec_rejects_disabled_service() {
+        let mut config = AppConfig::default();
+        config
+            .services
+            .get_mut("daemon")
+            .expect("daemon service")
+            .enabled = false;
+        let err = build_spec("daemon", &config)
+            .expect_err("spec for a disabled service must not build");
+        assert!(
+            err.contains("disabled"),
+            "error must mention the service is disabled: {}",
+            err
+        );
     }
 
     #[test]

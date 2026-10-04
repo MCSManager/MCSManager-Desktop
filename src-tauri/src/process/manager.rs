@@ -195,14 +195,26 @@ impl ProcessManager {
     }
 
     pub fn start_all(&self) -> Result<(), ProcessError> {
+        self.start_only(&self.order.clone())
+    }
+
+    pub fn start_only(&self, ids: &[String]) -> Result<(), ProcessError> {
         let mut first_error: Option<ProcessError> = None;
-        for id in &self.order {
+        for id in ids {
             let delay_ms = self
                 .specs
                 .get(id)
                 .map(|spec| spec.start_delay_ms)
                 .unwrap_or(0);
-            let process = Arc::clone(self.process_for(id).expect("order and processes in sync"));
+            let process = match self.process_for(id) {
+                Ok(process) => Arc::clone(process),
+                Err(error) => {
+                    if first_error.is_none() && is_real_error(&error) {
+                        first_error = Some(error);
+                    }
+                    continue;
+                }
+            };
             if delay_ms == 0 {
                 if !self.is_startable(id) {
                     continue;
@@ -691,5 +703,34 @@ mod tests {
         let fresh = manager.status("swap-delay").expect("status after replace");
         assert_eq!(fresh.state, ServiceState::Stopped);
         assert_eq!(fresh.pid, None);
+    }
+
+    #[test]
+    fn start_only_starts_listed_services_only() {
+        let (sink, events) = make_sink();
+        let mut manager = ProcessManager::new(sink, Duration::from_millis(300));
+        manager
+            .register(make_spec("listed", LONG_RUN, 0))
+            .expect("register listed");
+        manager
+            .register(make_spec("skipped", LONG_RUN, 200))
+            .expect("register skipped");
+        manager
+            .start_only(&["listed".to_string()])
+            .expect("start_only succeeds");
+        let listed_up = wait_until(Duration::from_secs(2), || is_running(&manager, "listed"));
+        assert!(listed_up, "the listed service must reach Running");
+        thread::sleep(Duration::from_millis(600));
+        assert!(
+            !is_running(&manager, "skipped"),
+            "the unlisted service must never start, even with a delayed spec"
+        );
+        let running = state_ids(&events, ServiceState::Running);
+        assert_eq!(
+            running,
+            vec!["listed".to_string()],
+            "only the listed service may reach Running"
+        );
+        manager.shutdown();
     }
 }
