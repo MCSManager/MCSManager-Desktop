@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { useI18n } from "../../i18n";
 import type { ServiceState } from "../../types";
 import { Icon } from "../layout/Icon";
@@ -8,53 +7,26 @@ export interface BrowserTabProps {
   ready: boolean | null;
   serviceState: ServiceState;
   onStartPanel: () => void;
-  onOpenExternal: () => void;
 }
 
-export function BrowserTab({
-  url,
-  ready,
-  serviceState,
-  onStartPanel,
-  onOpenExternal,
-}: BrowserTabProps) {
+export function BrowserTab({ url, ready, serviceState, onStartPanel }: BrowserTabProps) {
   const { t } = useI18n();
-  const [refreshNonce, setRefreshNonce] = useState(0);
 
   return (
     <section className="browser">
-      <div className="browser-toolbar">
-        <span className="browser-url">{url}</span>
-        {ready !== null ? (
+      {ready !== null ? (
+        <div className="browser-toolbar">
           <span
             className={`badge ${ready ? "badge--ready" : "badge--not-ready"}`}
             data-ready={ready ? "true" : "false"}
           >
             {ready ? t("status.ready") : t("status.notReady")}
           </span>
-        ) : null}
-        <button
-          type="button"
-          className="browser-btn"
-          onClick={() => setRefreshNonce((nonce) => nonce + 1)}
-        >
-          <Icon name="refresh" />
-          <span>{t("browser.refresh")}</span>
-        </button>
-        <button type="button" className="browser-btn" onClick={onOpenExternal}>
-          <Icon name="external" />
-          <span>{t("browser.openExternal")}</span>
-        </button>
-      </div>
+        </div>
+      ) : null}
       <div className="browser-content">
         {serviceState === "running" ? (
-          <iframe
-            className="browser-frame"
-            title={t("tab.panel")}
-            src={url}
-            key={refreshNonce}
-            data-refresh={refreshNonce}
-          />
+          <iframe className="browser-frame" title={t("tab.panel")} src={url} />
         ) : (
           <div className="browser-overlay">
             <h2 className="browser-overlay-title">{t("browser.notRunning.title")}</h2>

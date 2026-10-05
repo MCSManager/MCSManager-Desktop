@@ -35,15 +35,6 @@ export function ServiceSettingsForm({ serviceId, value, onChange }: ServiceSetti
         <span>{t("settings.enabled")}</span>
       </label>
       <label className="settings-field">
-        <span className="settings-label">{t("settings.workingDir")}</span>
-        <input
-          className="settings-input"
-          type="text"
-          value={value.workingDir}
-          onChange={(event) => set({ workingDir: event.target.value })}
-        />
-      </label>
-      <label className="settings-field">
         <span className="settings-label">{t("settings.script")}</span>
         <input
           className="settings-input"

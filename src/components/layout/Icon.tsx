@@ -1,16 +1,7 @@
 import type { ReactNode } from "react";
 
 export type IconName =
-  | "play"
-  | "stop"
-  | "restart"
-  | "settings"
-  | "globe"
-  | "refresh"
-  | "external"
-  | "copy"
-  | "trash"
-  | "logo";
+  "play" | "stop" | "restart" | "settings" | "globe" | "external" | "copy" | "trash" | "logo";
 
 function shapeFor(name: IconName): ReactNode {
   switch (name) {
@@ -62,35 +53,6 @@ function shapeFor(name: IconName): ReactNode {
             stroke="currentColor"
             strokeWidth="1.4"
             strokeLinecap="round"
-          />
-        </>
-      );
-    case "refresh":
-      return (
-        <>
-          <polyline
-            points="15.1 3 15.1 6.5 11.6 6.5"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.4"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-          <polyline
-            points="1.2 13 1.2 9.5 4.7 9.5"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.4"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-          <path
-            d="M2.4 6.1A5.6 5.6 0 0 1 12.1 3.9L15.1 6.5M1.2 9.5L3.8 12.1A5.6 5.6 0 0 0 13.4 9.9"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.4"
-            strokeLinecap="round"
-            strokeLinejoin="round"
           />
         </>
       );

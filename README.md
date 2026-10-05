@@ -9,14 +9,29 @@ and React 19 + TypeScript.
 
 - Node.js 22 or newer (to install, develop, and to run the managed services)
 - Rust toolchain (for `cargo` / Tauri builds; see [Tauri prerequisites](https://tauri.app/start/prerequisites/))
-- A **built** MCSManager deployment, either:
-  - a release build with `production-code/daemon` and `production-code/web` directories, or
-  - a dev checkout containing `daemon/` and `panel/` directories (each with `production/app.js`)
+- A **built** MCSManager deployment placed in the fixed service folders next to the app:
+  `daemon/` and `web/` (each containing `app.js`, as produced by the MCSManager release
+  bundle or `build.bat`)
+
+## Service layout (fixed)
+
+Service directories are fixed relative to the **run directory** — the folder containing
+`mcsmanager-desktop.exe` (in development, the project root):
+
+```
+<run directory>/
+├── mcsmanager-desktop.exe
+├── daemon/        # daemon deployment (node app.js runs here)
+└── web/           # panel deployment  (node app.js runs here)
+```
+
+This is a portable layout: keep the exe and the two service folders together. Both folders
+are validated at startup; missing folders surface as warnings in Settings.
 
 ## Configuration
 
-Open Settings in the app, or edit `config.json` directly. The file lives next to the app's
-data directory:
+Open Settings in the app, or edit `config.json` directly. The file lives in the app data
+directory:
 
 ```
 %APPDATA%/com.yumao.mcsmanager-desktop/config.json
@@ -27,11 +42,8 @@ and replaced with defaults.
 
 Each service (`daemon` and `panel`) is configured with:
 
-- `workingDir` — the directory containing `app.js`, e.g. `C:/MCSManager/production-code/daemon`
-  and `C:/MCSManager/production-code/web` for release builds. For a dev checkout point at the
-  `daemon` and `panel` directories instead and set `script` to `production/app.js`.
-- `script` — the entry file run inside `workingDir` (`app.js` for release builds,
-  `production/app.js` for a dev checkout)
+- `script` — the entry file run inside its fixed folder (`app.js` for release builds,
+  `production/app.js` for a dev-checkout deployment)
 - `extraArgs`, `startDelayMs` (milliseconds to wait before starting the panel), `readyPort`
   (TCP port polled for readiness), `enabled`
 
@@ -45,6 +57,8 @@ npm install
 npm run tauri dev     # develop with hot reload
 npm run tauri build   # produce a bundled installer
 ```
+
+Full Windows build & release guide: [`.agents/skills/building-windows-exe/SKILL.md`](.agents/skills/building-windows-exe/SKILL.md).
 
 ## Tests
 

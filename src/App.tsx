@@ -2,6 +2,7 @@ import { useState } from "react";
 import { I18nProvider } from "./i18n";
 import { BrowserTab } from "./components/browser/BrowserTab";
 import { Dashboard } from "./components/dashboard/Dashboard";
+import { ContextMenu } from "./components/layout/ContextMenu";
 import { TopBar } from "./components/layout/TopBar";
 import type { TabId } from "./components/layout/TabBar";
 import { SettingsModal } from "./components/settings/SettingsModal";
@@ -35,6 +36,7 @@ function AppShell() {
         onStartAll={() => void startAll()}
         onStopAll={() => void stopAll()}
         onOpenSettings={() => setSettingsOpen(true)}
+        onOpenExternal={() => void openExternal(panelUrl).catch(() => {})}
         busy={busy}
       />
       <main className="app-main">
@@ -46,7 +48,6 @@ function AppShell() {
             ready={panelState === "running" && panelPort != null ? panelReady : null}
             serviceState={panelState}
             onStartPanel={() => void start("panel")}
-            onOpenExternal={() => void openExternal(panelUrl).catch(() => {})}
           />
         )}
       </main>
@@ -59,6 +60,7 @@ function AppShell() {
         onSave={save}
         onClose={() => setSettingsOpen(false)}
       />
+      <ContextMenu />
     </div>
   );
 }

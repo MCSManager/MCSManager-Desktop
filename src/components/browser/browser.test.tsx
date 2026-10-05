@@ -7,21 +7,19 @@ import { BrowserTab, type BrowserTabProps } from "./BrowserTab";
 
 function renderTab(overrides: Partial<BrowserTabProps> = {}) {
   const onStartPanel = overrides.onStartPanel ?? vi.fn();
-  const onOpenExternal = overrides.onOpenExternal ?? vi.fn();
   const props: BrowserTabProps = {
     url: "http://localhost:23333",
     ready: null,
     serviceState: "running",
     ...overrides,
     onStartPanel,
-    onOpenExternal,
   };
   const view = render(
     <I18nProvider initialLanguage="en">
       <BrowserTab {...props} />
     </I18nProvider>,
   );
-  return { ...view, onStartPanel, onOpenExternal };
+  return { ...view, onStartPanel };
 }
 
 describe("browser", () => {
@@ -43,20 +41,17 @@ describe("browser", () => {
     expect(screen.queryByTitle(en["tab.panel"])).not.toBeInTheDocument();
   });
 
-  it("refresh reloads frame key", async () => {
-    const user = userEvent.setup();
-    renderTab({ serviceState: "running" });
-    const before = screen.getByTitle(en["tab.panel"]).getAttribute("data-refresh");
-    await user.click(screen.getByRole("button", { name: en["browser.refresh"] }));
-    const after = screen.getByTitle(en["tab.panel"]).getAttribute("data-refresh");
-    expect(after).not.toBe(before);
+  it("browser_tab_hides_address_bar_and_refresh", () => {
+    renderTab({ url: "http://localhost:23333", serviceState: "running" });
+    expect(screen.queryByText("http://localhost:23333")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: en["browser.refresh"] })).not.toBeInTheDocument();
   });
 
-  it("external button delegates to onOpenExternal", async () => {
-    const user = userEvent.setup();
-    const view = renderTab({ serviceState: "running" });
-    await user.click(screen.getByRole("button", { name: en["browser.openExternal"] }));
-    expect(view.onOpenExternal).toHaveBeenCalledTimes(1);
+  it("browser_tab_defers_open_external_to_topbar", () => {
+    renderTab({ serviceState: "running" });
+    expect(
+      screen.queryByRole("button", { name: en["browser.openExternal"] }),
+    ).not.toBeInTheDocument();
   });
 
   it("start button calls onStartPanel", async () => {

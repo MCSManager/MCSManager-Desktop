@@ -9,6 +9,7 @@ export function TopBar({
   onStartAll,
   onStopAll,
   onOpenSettings,
+  onOpenExternal,
   busy,
 }: {
   activeTab: TabId;
@@ -16,6 +17,7 @@ export function TopBar({
   onStartAll: () => void;
   onStopAll: () => void;
   onOpenSettings: () => void;
+  onOpenExternal: () => void;
   busy: boolean;
 }) {
   const { t, language, setLanguage } = useI18n();
@@ -30,7 +32,15 @@ export function TopBar({
         <Icon name="logo" size={20} />
         <h1 className="topbar-title">{t("app.title")}</h1>
       </div>
-      <TabBar tabs={tabs} active={activeTab} onChange={onTabChange} />
+      <div className="topbar-nav">
+        <TabBar tabs={tabs} active={activeTab} onChange={onTabChange} />
+        {activeTab === "panel" ? (
+          <button type="button" className="topbar-btn" onClick={onOpenExternal}>
+            <Icon name="external" />
+            <span>{t("browser.openExternal")}</span>
+          </button>
+        ) : null}
+      </div>
       <div className="topbar-actions">
         <LanguageSwitcher language={language} onChange={setLanguage} />
         <button type="button" className="topbar-btn" onClick={onStartAll} disabled={busy}>

@@ -1,6 +1,8 @@
 mod model;
+mod paths;
 
 pub use model::{AppConfig, ConfigError, Language, ServiceConfig};
+pub use paths::{run_dir, service_dir, service_folder_name, DAEMON_FOLDER, PANEL_FOLDER};
 
 use std::path::Path;
 
@@ -141,7 +143,6 @@ mod tests {
 
         let daemon = config.services.get("daemon").expect("daemon service");
         assert!(daemon.enabled);
-        assert_eq!(daemon.working_dir, "");
         assert_eq!(daemon.script, "app.js");
         assert_eq!(daemon.extra_args, Vec::<String>::new());
         assert_eq!(daemon.start_delay_ms, 0);
@@ -149,7 +150,6 @@ mod tests {
 
         let panel = config.services.get("panel").expect("panel service");
         assert!(panel.enabled);
-        assert_eq!(panel.working_dir, "");
         assert_eq!(panel.script, "app.js");
         assert_eq!(panel.extra_args, Vec::<String>::new());
         assert_eq!(panel.start_delay_ms, 1500);
@@ -170,14 +170,12 @@ mod tests {
 
         let daemon = config.services.get_mut("daemon").expect("daemon service");
         daemon.enabled = false;
-        daemon.working_dir = "C:/mcsmanager/daemon".to_string();
         daemon.script = "production/app.js".to_string();
         daemon.extra_args = vec!["production/app.js".to_string()];
         daemon.start_delay_ms = 7;
         daemon.ready_port = None;
 
         let panel = config.services.get_mut("panel").expect("panel service");
-        panel.working_dir = "C:/mcsmanager/panel".to_string();
         panel.script = "panel.js".to_string();
         panel.extra_args = vec!["--flag".to_string()];
         panel.start_delay_ms = 42;
@@ -293,40 +291,97 @@ mod tests {
     }
 
     #[test]
-    fn path_issues_reports_missing_dir() {
-        let dir = unique_temp_dir();
-        let missing = dir.join("does-not-exist");
+    fn path_issues_reports_missing_service_folder() {
+        let base = unique_temp_dir();
 
-        let mut config = AppConfig::default();
-        config.services.get_mut("daemon").expect("daemon service").working_dir =
-            missing.to_string_lossy().into_owned();
-
-        let issues = config.path_issues();
-        assert!(issues.len() >= 1);
+        let issues = AppConfig::default().path_issues_in(&base);
+        assert_eq!(
+            issues.len(),
+            2,
+            "both enabled services warn when folders are missing: {:?}",
+            issues
+        );
         assert!(issues
             .iter()
-            .any(|issue| issue.contains(&missing.to_string_lossy().into_owned())));
+            .any(|issue| issue.contains(&base.join("daemon").to_string_lossy().into_owned())));
+        assert!(issues
+            .iter()
+            .any(|issue| issue.contains(&base.join("web").to_string_lossy().into_owned())));
 
-        cleanup(&dir);
+        cleanup(&base);
     }
 
     #[test]
-    fn path_issues_empty_for_default_config() {
-        let config = AppConfig::default();
-        assert!(config.path_issues().is_empty());
+    fn path_issues_empty_when_fixed_layout_present() {
+        let base = unique_temp_dir();
+        for folder in ["daemon", "web"] {
+            let dir = base.join(folder);
+            std::fs::create_dir_all(&dir).expect("create service folder");
+            std::fs::write(dir.join("app.js"), "// stub").expect("write script");
+        }
+
+        assert!(AppConfig::default().path_issues_in(&base).is_empty());
+
+        cleanup(&base);
+    }
+
+    #[test]
+    fn path_issues_reports_missing_script() {
+        let base = unique_temp_dir();
+        for folder in ["daemon", "web"] {
+            std::fs::create_dir_all(base.join(folder)).expect("create service folder");
+        }
+
+        let issues = AppConfig::default().path_issues_in(&base);
+        assert_eq!(issues.len(), 2);
+        assert!(issues.iter().all(|issue| issue.contains("app.js")));
+
+        cleanup(&base);
     }
 
     #[test]
     fn path_issues_skips_disabled_service() {
-        let dir = unique_temp_dir();
-        let missing = dir.join("does-not-exist");
-
+        let base = unique_temp_dir();
         let mut config = AppConfig::default();
-        config.services.get_mut("daemon").expect("daemon service").enabled = false;
-        config.services.get_mut("daemon").expect("daemon service").working_dir =
-            missing.to_string_lossy().into_owned();
+        config
+            .services
+            .get_mut("daemon")
+            .expect("daemon service")
+            .enabled = false;
 
-        assert!(config.path_issues().is_empty());
+        let issues = config.path_issues_in(&base);
+        assert_eq!(issues.len(), 1, "only the enabled panel warns: {:?}", issues);
+        assert!(issues[0].contains("[panel]"));
+
+        cleanup(&base);
+    }
+
+    #[test]
+    fn load_ignores_legacy_working_dir_field() {
+        let dir = unique_temp_dir();
+        let path = dir.join("config.json");
+        let json = r#"{"services":{"daemon":{"workingDir":"C:/legacy/daemon"},"panel":{"workingDir":"C:/legacy/panel"}}}"#;
+        std::fs::write(&path, json).expect("write config");
+
+        let outcome = load_from(&path).expect("load config");
+        assert!(!outcome.recovered);
+        assert!(outcome.error.is_none());
+        assert_eq!(
+            outcome.config.services.get("daemon").expect("daemon service"),
+            &ServiceConfig::default()
+        );
+        assert_eq!(
+            outcome.config.services.get("panel").expect("panel service"),
+            &ServiceConfig::default()
+        );
+
+        save_to(&path, &outcome.config).expect("save config");
+        let saved = std::fs::read_to_string(&path).expect("read saved config");
+        assert!(
+            !saved.contains("workingDir"),
+            "legacy field must not round-trip: {}",
+            saved
+        );
 
         cleanup(&dir);
     }

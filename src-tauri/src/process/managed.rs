@@ -502,9 +502,10 @@ mod tests {
         managed.stop().expect("stop succeeds");
         let elapsed = started.elapsed();
         assert!(
-            elapsed < Duration::from_secs(8),
-            "force stop took {:?}, expected under 8s",
-            elapsed
+            elapsed < KILL_GRACE + Duration::from_secs(2),
+            "force stop took {:?}, expected under {:?}",
+            elapsed,
+            KILL_GRACE + Duration::from_secs(2)
         );
         assert_eq!(managed.status().state, ServiceState::Stopped);
         assert!(

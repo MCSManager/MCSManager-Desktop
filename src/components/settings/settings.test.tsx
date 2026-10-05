@@ -19,7 +19,6 @@ function makeConfig(): AppConfig {
     services: {
       daemon: {
         enabled: true,
-        workingDir: "C:/mcsm/daemon",
         script: "app.js",
         extraArgs: [],
         startDelayMs: 0,
@@ -27,7 +26,6 @@ function makeConfig(): AppConfig {
       },
       panel: {
         enabled: true,
-        workingDir: "C:/mcsm/panel",
         script: "app.js",
         extraArgs: [],
         startDelayMs: 1500,

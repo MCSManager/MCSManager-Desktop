@@ -42,7 +42,7 @@ export function Dashboard() {
   };
 
   return (
-    <>
+    <div className="dashboard">
       {actionError != null ? (
         <div className="card-banner card-banner--error" role="alert">
           {actionError}
@@ -68,6 +68,6 @@ export function Dashboard() {
           onAction={(action) => runAction("panel", action)}
         />
       </div>
-    </>
+    </div>
   );
 }

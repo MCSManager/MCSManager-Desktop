@@ -26,7 +26,6 @@ export interface OutputLine {
 
 export interface ServiceConfig {
   enabled: boolean;
-  workingDir: string;
   script: string;
   extraArgs: string[];
   startDelayMs: number;

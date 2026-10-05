@@ -171,8 +171,11 @@ describe("app integration flows", () => {
     await user.click(screen.getByRole("button", { name: en["settings.close"] }));
     expect(screen.queryByTestId("settings-modal")).not.toBeInTheDocument();
 
+    await act(async () => {
+      mock.emitStatus({ id: "panel", state: "running", pid: 23333, startedAt: 1700000000000 });
+    });
     await user.click(screen.getByRole("tab", { name: en["tab.panel"] }));
-    expect(screen.getByText("http://127.0.0.1:30000")).toBeInTheDocument();
+    expect(screen.getByTitle(en["tab.panel"])).toHaveAttribute("src", "http://127.0.0.1:30000");
   });
 
   it("config save refreshes all consumers", async () => {

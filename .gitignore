@@ -28,4 +28,5 @@ dist-ssr
 
 # TypeScript build info
 *.tsbuildinfo
-
+daemon/
+web/

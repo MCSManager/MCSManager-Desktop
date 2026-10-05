@@ -15,7 +15,6 @@ pub enum Language {
 #[serde(rename_all = "camelCase", default)]
 pub struct ServiceConfig {
     pub enabled: bool,
-    pub working_dir: String,
     pub script: String,
     pub extra_args: Vec<String>,
     pub start_delay_ms: u64,
@@ -26,7 +25,6 @@ impl Default for ServiceConfig {
     fn default() -> Self {
         Self {
             enabled: true,
-            working_dir: String::new(),
             script: "app.js".to_string(),
             extra_args: Vec::new(),
             start_delay_ms: 0,
@@ -123,19 +121,32 @@ impl AppConfig {
         Ok(())
     }
 
+    /// Reports path problems for enabled services under the real run directory.
     pub fn path_issues(&self) -> Vec<String> {
+        self.path_issues_in(&super::paths::run_dir())
+    }
+
+    /// Reports path problems for enabled services under a given run directory.
+    /// Service folders are fixed (`daemon` and `web` next to the run directory).
+    pub fn path_issues_in(&self, run_dir: &Path) -> Vec<String> {
         let mut issues = Vec::new();
         for (name, service) in &self.services {
-            if !service.enabled || service.working_dir.is_empty() {
+            if !service.enabled {
                 continue;
             }
-            if !Path::new(&service.working_dir).is_dir() {
+            let Some(folder) = super::paths::service_folder_name(name) else {
+                continue;
+            };
+            let service_dir = run_dir.join(folder);
+            if !service_dir.is_dir() {
                 issues.push(format!(
-                    "[{}] working_dir is not an existing directory: {}",
-                    name, service.working_dir
+                    "[{}] service folder is not an existing directory: {}",
+                    name,
+                    service_dir.display()
                 ));
+                continue;
             }
-            let script_path = Path::new(&service.working_dir).join(&service.script);
+            let script_path = service_dir.join(&service.script);
             if !script_path.is_file() {
                 issues.push(format!(
                     "[{}] script is not an existing file: {}",

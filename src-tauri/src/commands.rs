@@ -103,7 +103,9 @@ pub(crate) fn make_spec(id: &str, service: &ServiceConfig, node_path: &str) -> P
         display_name: id.to_string(),
         command,
         args,
-        working_dir: service.working_dir.clone(),
+        working_dir: crate::config::service_dir(id)
+            .map(|dir| dir.to_string_lossy().into_owned())
+            .unwrap_or_default(),
         start_delay_ms: service.start_delay_ms,
     }
 }
@@ -325,6 +327,25 @@ mod tests {
             err.contains("disabled"),
             "error must mention the service is disabled: {}",
             err
+        );
+    }
+
+    #[test]
+    fn make_spec_uses_fixed_service_directories() {
+        let config = AppConfig::default();
+
+        let daemon = config.services.get("daemon").expect("daemon service");
+        let spec = make_spec("daemon", daemon, &config.node_path);
+        assert_eq!(
+            PathBuf::from(&spec.working_dir),
+            crate::config::service_dir("daemon").expect("daemon dir")
+        );
+
+        let panel = config.services.get("panel").expect("panel service");
+        let spec = make_spec("panel", panel, &config.node_path);
+        assert_eq!(
+            PathBuf::from(&spec.working_dir),
+            crate::config::service_dir("panel").expect("panel dir")
         );
     }
 

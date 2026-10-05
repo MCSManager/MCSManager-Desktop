@@ -19,7 +19,6 @@ export interface MockBridge extends Bridge {
 function makeService(overrides: Partial<ServiceConfig>): ServiceConfig {
   return {
     enabled: true,
-    workingDir: "",
     script: "app.js",
     extraArgs: [],
     startDelayMs: 0,
