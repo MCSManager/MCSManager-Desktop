@@ -61,8 +61,9 @@ describe("browser", () => {
     expect(view.onStartPanel).toHaveBeenCalledTimes(1);
   });
 
-  it("readiness badge shows when ready provided", () => {
+  it("browser_tab_hides_readiness_badge", () => {
     renderTab({ serviceState: "running", ready: true });
-    expect(screen.getByText(en["status.ready"])).toBeInTheDocument();
+    expect(screen.queryByText(en["status.ready"])).not.toBeInTheDocument();
+    expect(screen.queryByText(en["status.notReady"])).not.toBeInTheDocument();
   });
 });

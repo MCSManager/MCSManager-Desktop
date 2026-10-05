@@ -9,8 +9,7 @@ export interface BrowserTabProps {
   onStartPanel: () => void;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-export function BrowserTab({ url, ready, serviceState, onStartPanel }: BrowserTabProps) {
+export function BrowserTab({ url, serviceState, onStartPanel }: BrowserTabProps) {
   const { t } = useI18n();
 
   return (

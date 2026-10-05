@@ -132,7 +132,7 @@ describe("app integration flows", () => {
     });
   });
 
-  it("app wires panel readiness badge", async () => {
+  it("app keeps probing panel readiness", async () => {
     const user = userEvent.setup();
     const mock = createMockBridge();
     await renderReadyApp(mock);
@@ -142,7 +142,7 @@ describe("app integration flows", () => {
 
     await user.click(screen.getByRole("tab", { name: en["tab.panel"] }));
     await waitFor(() => {
-      expect(screen.getByText(en["status.ready"])).toBeInTheDocument();
+      expect(screen.queryByText(en["status.ready"])).not.toBeInTheDocument();
     });
     expect(mock.calls).toContainEqual({ name: "probeTcp", args: ["127.0.0.1", 23333, 1000] });
   });
