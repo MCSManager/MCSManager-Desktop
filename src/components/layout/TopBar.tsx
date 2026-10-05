@@ -27,11 +27,11 @@ export function TopBar({
   ];
 
   return (
-    <header className="topbar">
-      <div className="topbar-brand">
+    <footer className="topbar">
+      {/* <div className="topbar-brand">
         <Icon name="logo" size={20} />
         <h1 className="topbar-title">{t("app.title")}</h1>
-      </div>
+      </div> */}
       <div className="topbar-nav">
         <TabBar tabs={tabs} active={activeTab} onChange={onTabChange} />
         {activeTab === "panel" ? (
@@ -60,6 +60,6 @@ export function TopBar({
           <Icon name="settings" />
         </button>
       </div>
-    </header>
+    </footer>
   );
 }

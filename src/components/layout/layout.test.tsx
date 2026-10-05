@@ -54,7 +54,7 @@ describe("layout", () => {
         />
       </I18nProvider>,
     );
-    const button = within(screen.getByRole("banner")).getByRole("button", {
+    const button = within(screen.getByRole("contentinfo")).getByRole("button", {
       name: en["browser.openExternal"],
     });
     await user.click(button);
@@ -84,7 +84,8 @@ describe("layout", () => {
     const user = userEvent.setup();
     render(<App bridge={createMockBridge()} />);
     expect(screen.getByText(en["app.title"])).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: zh["language.zh"] }));
+    await user.click(screen.getByRole("button", { name: en["language.switcher"] }));
+    await user.click(screen.getByRole("menuitemradio", { name: zh["language.zh"] }));
     expect(screen.getByText(zh["app.title"])).toBeInTheDocument();
   });
 

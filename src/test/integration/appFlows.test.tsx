@@ -86,7 +86,8 @@ describe("app integration flows", () => {
     const mock = createMockBridge();
     await renderReadyApp(mock);
 
-    await user.click(screen.getByRole("button", { name: zh["language.zh"] }));
+    await user.click(screen.getByRole("button", { name: en["language.switcher"] }));
+    await user.click(screen.getByRole("menuitemradio", { name: zh["language.zh"] }));
 
     expect(screen.getByRole("button", { name: zh["action.startAll"] })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: zh["action.stopAll"] })).toBeInTheDocument();

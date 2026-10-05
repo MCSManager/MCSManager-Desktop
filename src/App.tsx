@@ -30,15 +30,6 @@ function AppShell() {
 
   return (
     <div className="app-shell">
-      <TopBar
-        activeTab={tab}
-        onTabChange={setTab}
-        onStartAll={() => void startAll()}
-        onStopAll={() => void stopAll()}
-        onOpenSettings={() => setSettingsOpen(true)}
-        onOpenExternal={() => void openExternal(panelUrl).catch(() => {})}
-        busy={busy}
-      />
       <main className="app-main">
         {tab === "dashboard" ? (
           <Dashboard />
@@ -51,6 +42,15 @@ function AppShell() {
           />
         )}
       </main>
+      <TopBar
+        activeTab={tab}
+        onTabChange={setTab}
+        onStartAll={() => void startAll()}
+        onStopAll={() => void stopAll()}
+        onOpenSettings={() => setSettingsOpen(true)}
+        onOpenExternal={() => void openExternal(panelUrl).catch(() => {})}
+        busy={busy}
+      />
       <SettingsModal
         open={settingsOpen}
         config={config}

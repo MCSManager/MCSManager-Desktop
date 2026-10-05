@@ -507,7 +507,10 @@ mod tests {
             elapsed,
             KILL_GRACE + Duration::from_secs(2)
         );
-        assert_eq!(managed.status().state, ServiceState::Stopped);
+        let stopped = wait_until(Duration::from_secs(30), || {
+            managed.status().state == ServiceState::Stopped
+        });
+        assert!(stopped, "expected Stopped state after force kill lands");
         assert!(
             output_lines(&events)
                 .iter()

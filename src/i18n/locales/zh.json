@@ -4,6 +4,7 @@
   "tab.panel": "面板",
   "language.en": "English",
   "language.zh": "中文",
+  "language.switcher": "切换语言",
   "service.daemon.name": "守护进程",
   "service.panel.name": "面板",
   "state.stopped": "已停止",

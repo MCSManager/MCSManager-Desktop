@@ -4,6 +4,7 @@
   "tab.panel": "Panel",
   "language.en": "English",
   "language.zh": "中文",
+  "language.switcher": "Switch language",
   "service.daemon.name": "Daemon",
   "service.panel.name": "Panel",
   "state.stopped": "Stopped",

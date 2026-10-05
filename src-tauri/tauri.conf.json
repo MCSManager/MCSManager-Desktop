@@ -13,8 +13,8 @@
     "windows": [
       {
         "title": "MCSManager Desktop",
-        "width": 1280,
-        "height": 800,
+        "width": 1400,
+        "height": 960,
         "minWidth": 1024,
         "minHeight": 680
       }

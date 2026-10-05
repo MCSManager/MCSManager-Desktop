@@ -12,6 +12,13 @@ use process::manager::ProcessManager;
 
 type ShutdownSlot = Arc<Mutex<Option<std::thread::JoinHandle<()>>>>;
 
+const TARGET_WIDTH: f64 = 1400.0;
+const TARGET_HEIGHT: f64 = 960.0;
+
+fn fits_target_size(width: f64, height: f64) -> bool {
+    width >= TARGET_WIDTH && height >= TARGET_HEIGHT
+}
+
 fn lock_slot(slot: &Mutex<Option<std::thread::JoinHandle<()>>>) -> MutexGuard<'_, Option<std::thread::JoinHandle<()>>> {
     slot.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
 }
@@ -46,6 +53,20 @@ pub fn run() {
                 config_path,
                 startup_warnings,
             });
+            if let Some(window) = app.get_webview_window("main") {
+                let fits = window
+                    .primary_monitor()
+                    .ok()
+                    .flatten()
+                    .map(|monitor| {
+                        let logical = monitor.size().to_logical::<f64>(monitor.scale_factor());
+                        fits_target_size(logical.width, logical.height)
+                    })
+                    .unwrap_or(true);
+                if !fits {
+                    let _ = window.maximize();
+                }
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -78,4 +99,29 @@ pub fn run() {
                 }
             }
         });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::fits_target_size;
+
+    #[test]
+    fn fits_exact_target_size() {
+        assert!(fits_target_size(1400.0, 960.0));
+    }
+
+    #[test]
+    fn fits_larger_monitor() {
+        assert!(fits_target_size(2560.0, 1440.0));
+    }
+
+    #[test]
+    fn too_short_monitor_does_not_fit() {
+        assert!(!fits_target_size(1920.0, 900.0));
+    }
+
+    #[test]
+    fn too_narrow_monitor_does_not_fit() {
+        assert!(!fits_target_size(1280.0, 1080.0));
+    }
 }
