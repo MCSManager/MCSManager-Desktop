@@ -9,21 +9,12 @@ export interface BrowserTabProps {
   onStartPanel: () => void;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function BrowserTab({ url, ready, serviceState, onStartPanel }: BrowserTabProps) {
   const { t } = useI18n();
 
   return (
     <section className="browser">
-      {ready !== null ? (
-        <div className="browser-toolbar">
-          <span
-            className={`badge ${ready ? "badge--ready" : "badge--not-ready"}`}
-            data-ready={ready ? "true" : "false"}
-          >
-            {ready ? t("status.ready") : t("status.notReady")}
-          </span>
-        </div>
-      ) : null}
       <div className="browser-content">
         {serviceState === "running" ? (
           <iframe className="browser-frame" title={t("tab.panel")} src={url} />

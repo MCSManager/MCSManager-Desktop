@@ -71,7 +71,6 @@ button {
   flex: 1;
   min-height: 0;
   overflow: hidden;
-  padding: 14px;
 }
 
 .dashboard {
@@ -80,6 +79,7 @@ button {
   flex: 1;
   min-height: 0;
   gap: 12px;
+  padding: 14px;
 }
 
 .icon {
@@ -496,8 +496,8 @@ button {
   position: relative;
   flex: 1;
   min-height: 0;
-  border: 1px solid var(--border);
-  border-radius: 10px;
+  /* border: 1px solid var(--border); */
+  /* border-radius: 10px; */
   background: var(--surface);
   overflow: hidden;
 }
