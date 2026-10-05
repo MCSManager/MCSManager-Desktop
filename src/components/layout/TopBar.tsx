@@ -11,6 +11,7 @@ export function TopBar({
   onOpenSettings,
   onOpenExternal,
   busy,
+  hasActiveServices,
 }: {
   activeTab: TabId;
   onTabChange: (id: TabId) => void;
@@ -19,6 +20,7 @@ export function TopBar({
   onOpenSettings: () => void;
   onOpenExternal: () => void;
   busy: boolean;
+  hasActiveServices: boolean;
 }) {
   const { t, language, setLanguage } = useI18n();
   const tabs: { id: TabId; label: string }[] = [
@@ -28,10 +30,6 @@ export function TopBar({
 
   return (
     <footer className="topbar">
-      {/* <div className="topbar-brand">
-        <Icon name="logo" size={20} />
-        <h1 className="topbar-title">{t("app.title")}</h1>
-      </div> */}
       <div className="topbar-nav">
         <TabBar tabs={tabs} active={activeTab} onChange={onTabChange} />
         {activeTab === "panel" ? (
@@ -43,14 +41,27 @@ export function TopBar({
       </div>
       <div className="topbar-actions">
         <LanguageSwitcher language={language} onChange={setLanguage} />
-        <button type="button" className="topbar-btn" onClick={onStartAll} disabled={busy}>
-          <Icon name="play" />
-          <span>{t("action.startAll")}</span>
-        </button>
-        <button type="button" className="topbar-btn" onClick={onStopAll} disabled={busy}>
-          <Icon name="stop" />
-          <span>{t("action.stopAll")}</span>
-        </button>
+        {hasActiveServices ? (
+          <button
+            type="button"
+            className="topbar-btn topbar-btn--stop"
+            onClick={onStopAll}
+            disabled={busy}
+          >
+            <Icon name="stop" />
+            <span>{t("action.stopAll")}</span>
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="topbar-btn topbar-btn--start"
+            onClick={onStartAll}
+            disabled={busy}
+          >
+            <Icon name="play" />
+            <span>{t("action.startAll")}</span>
+          </button>
+        )}
         <button
           type="button"
           className="topbar-btn topbar-btn--icon"

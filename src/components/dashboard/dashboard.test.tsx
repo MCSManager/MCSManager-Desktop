@@ -11,6 +11,13 @@ function renderApp(mock: MockBridge) {
   return render(<App bridge={mock} />);
 }
 
+async function renderConsoleApp(mock: MockBridge) {
+  const user = userEvent.setup();
+  const view = renderApp(mock);
+  await user.click(screen.getByRole("tab", { name: en["tab.dashboard"] }));
+  return { user, ...view };
+}
+
 describe("dashboard", () => {
   beforeEach(() => {
     localStorage.clear();
@@ -20,17 +27,19 @@ describe("dashboard", () => {
 
   afterEach(() => {
     cleanup();
+    resetConfigStore();
+    resetServicesStore();
   });
 
-  it("renders both service cards", () => {
-    renderApp(createMockBridge());
+  it("renders both service cards", async () => {
+    await renderConsoleApp(createMockBridge());
     expect(screen.getByRole("heading", { name: en["service.daemon.name"] })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: en["service.panel.name"] })).toBeInTheDocument();
   });
 
   it("status badge maps states", async () => {
     const mock = createMockBridge();
-    renderApp(mock);
+    await renderConsoleApp(mock);
     const card = screen.getByTestId("service-card-daemon");
     const states = ["stopped", "starting", "running", "stopping", "error"] as const;
     for (const state of states) {
@@ -43,7 +52,7 @@ describe("dashboard", () => {
 
   it("console shows streamed lines and respects stderr style", async () => {
     const mock = createMockBridge();
-    renderApp(mock);
+    await renderConsoleApp(mock);
     await act(async () => {
       mock.emitOutput({ id: "daemon", stream: "stdout", line: "boot ok", timestamp: 1 });
       mock.emitOutput({ id: "daemon", stream: "stderr", line: "boom", timestamp: 2 });
@@ -56,9 +65,8 @@ describe("dashboard", () => {
   });
 
   it("clear empties the console", async () => {
-    const user = userEvent.setup();
     const mock = createMockBridge();
-    renderApp(mock);
+    const { user } = await renderConsoleApp(mock);
     await act(async () => {
       mock.emitOutput({ id: "daemon", stream: "stdout", line: "hello", timestamp: 1 });
       mock.emitOutput({ id: "panel", stream: "stderr", line: "other", timestamp: 2 });
@@ -72,7 +80,7 @@ describe("dashboard", () => {
 
   it("stop button enabled only when running", async () => {
     const mock = createMockBridge();
-    renderApp(mock);
+    await renderConsoleApp(mock);
     const card = screen.getByTestId("service-card-daemon");
     const stopButton = () => within(card).getByRole("button", { name: en["action.stop"] });
 
@@ -96,7 +104,7 @@ describe("dashboard", () => {
 
   it("renders pid and exit code", async () => {
     const mock = createMockBridge();
-    renderApp(mock);
+    await renderConsoleApp(mock);
     await act(async () => {
       mock.emitStatus({ id: "daemon", state: "error", pid: 42, exitCode: 3 });
     });
@@ -108,10 +116,9 @@ describe("dashboard", () => {
   });
 
   it("start_all_skips_disabled_services", async () => {
-    const user = userEvent.setup();
     const mock = createMockBridge();
     mock.config.services.daemon.enabled = false;
-    renderApp(mock);
+    const { user } = await renderConsoleApp(mock);
     await act(async () => {});
 
     const daemonCard = screen.getByTestId("service-card-daemon");
@@ -123,9 +130,10 @@ describe("dashboard", () => {
     expect(within(panelCard).queryByText(en["status.disabled"])).not.toBeInTheDocument();
     expect(within(panelCard).getByRole("button", { name: en["action.start"] })).toBeEnabled();
 
+    const before = mock.calls.filter((call) => call.name === "startAll").length;
     await user.click(screen.getByRole("button", { name: en["action.startAll"] }));
     await waitFor(() => {
-      expect(mock.calls).toContainEqual({ name: "startAll", args: [] });
+      expect(mock.calls.filter((call) => call.name === "startAll")).toHaveLength(before + 1);
     });
     expect(mock.calls).not.toContainEqual({ name: "startService", args: ["daemon"] });
   });
