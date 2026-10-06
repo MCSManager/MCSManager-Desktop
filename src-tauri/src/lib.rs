@@ -6,6 +6,9 @@ use std::sync::{Arc, Mutex, MutexGuard, RwLock};
 use std::time::Duration;
 
 use tauri::Manager;
+#[cfg(not(dev))]
+use tauri::{ipc::CapabilityBuilder, Url};
+use tauri::{WebviewUrl, WebviewWindowBuilder};
 
 use commands::{read_manager, AppState};
 use process::manager::ProcessManager;
@@ -14,6 +17,44 @@ type ShutdownSlot = Arc<Mutex<Option<std::thread::JoinHandle<()>>>>;
 
 const TARGET_WIDTH: f64 = 1400.0;
 const TARGET_HEIGHT: f64 = 960.0;
+
+const MIN_WINDOW_WIDTH: f64 = 1024.0;
+const MIN_WINDOW_HEIGHT: f64 = 680.0;
+const WINDOW_LABEL: &str = "main";
+const WINDOW_TITLE: &str = "MCSManager Desktop";
+
+/// The panel web UI is embedded in an iframe. Browsers only attach cookies to
+/// same-site requests, but the production custom-protocol origin on Windows
+/// (`http://tauri.localhost`) is a different site than the panel origin
+/// (`http://localhost:23333`). The login session cookie therefore becomes a
+/// cross-site cookie and WebView2 refuses to store/send it, which is why the
+/// authenticated `/api/auth/` call is rejected.
+///
+/// Serving the shell over a loopback HTTP server puts it on the same site
+/// (`localhost`) as the panel, mirroring `tauri dev` where the Vite dev server
+/// already runs on `localhost` and cookies work.
+fn pick_unused_port() -> Option<u16> {
+    std::net::TcpListener::bind("127.0.0.1:0")
+        .ok()
+        .and_then(|listener| listener.local_addr().ok())
+        .map(|addr| addr.port())
+}
+
+/// Picks the loopback host the shell is served from so it stays on the same
+/// site as the configured panel. `127.0.0.1` and `localhost` are different
+/// sites for cookie purposes, so the shell host must mirror whichever one the
+/// panel uses; anything else (remote hosts, IPv6) falls back to `localhost`.
+#[cfg(not(dev))]
+fn shell_host_for_panel(panel_url: &str) -> String {
+    match panel_url
+        .parse::<Url>()
+        .ok()
+        .and_then(|url| url.host_str().map(str::to_owned))
+    {
+        Some(host) if host == "127.0.0.1" => host,
+        _ => "localhost".to_string(),
+    }
+}
 
 fn fits_target_size(width: f64, height: f64) -> bool {
     width >= TARGET_WIDTH && height >= TARGET_HEIGHT
@@ -27,10 +68,16 @@ fn lock_slot(slot: &Mutex<Option<std::thread::JoinHandle<()>>>) -> MutexGuard<'_
 pub fn run() {
     let shutdown: ShutdownSlot = Arc::new(Mutex::new(None));
     let shutdown_on_close = Arc::clone(&shutdown);
+    let localhost_port = pick_unused_port().unwrap_or(0);
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .setup(|app| {
+        .plugin(
+            tauri_plugin_localhost::Builder::new(localhost_port)
+                .host("127.0.0.1")
+                .build(),
+        )
+        .setup(move |app| {
             let config_path = app.path().app_config_dir()?.join("config.json");
             let outcome = config::load_from(&config_path)?;
             let startup_warnings: Vec<String> = outcome
@@ -53,7 +100,51 @@ pub fn run() {
                 config_path,
                 startup_warnings,
             });
-            if let Some(window) = app.get_webview_window("main") {
+
+            let url = {
+                #[cfg(dev)]
+                {
+                    // In development Vite serves the shell on http://localhost:1420,
+                    // which shares the `localhost` site with the panel already.
+                    WebviewUrl::App("index.html".into())
+                }
+                #[cfg(not(dev))]
+                {
+                    if localhost_port == 0 {
+                        // Extremely unlikely fallback: no loopback port was
+                        // available, so keep the default asset origin.
+                        WebviewUrl::App("index.html".into())
+                    } else {
+                        let panel_url = {
+                            let state = app.state::<AppState>();
+                            let config = state
+                                .config
+                                .lock()
+                                .unwrap_or_else(|poisoned| poisoned.into_inner());
+                            config.panel_url.clone()
+                        };
+                        let host = shell_host_for_panel(&panel_url);
+                        let origin = format!("http://{host}:{localhost_port}");
+                        app.add_capability(
+                            CapabilityBuilder::new("desktop-localhost")
+                                .remote(origin.clone())
+                                .window(WINDOW_LABEL)
+                                .permission("core:default")
+                                .permission("opener:default")
+                                .permission("allow-desktop-commands"),
+                        )?;
+                        WebviewUrl::External(origin.parse::<Url>()?)
+                    }
+                }
+            };
+
+            WebviewWindowBuilder::new(app, WINDOW_LABEL, url)
+                .title(WINDOW_TITLE)
+                .inner_size(TARGET_WIDTH, TARGET_HEIGHT)
+                .min_inner_size(MIN_WINDOW_WIDTH, MIN_WINDOW_HEIGHT)
+                .build()?;
+
+            if let Some(window) = app.get_webview_window(WINDOW_LABEL) {
                 let fits = window
                     .primary_monitor()
                     .ok()
@@ -82,7 +173,7 @@ pub fn run() {
             commands::get_app_info,
         ])
         .on_window_event(move |window, event| {
-            if matches!(event, tauri::WindowEvent::Destroyed) && window.label() == "main" {
+            if matches!(event, tauri::WindowEvent::Destroyed) && window.label() == WINDOW_LABEL {
                 let manager = Arc::clone(&window.state::<AppState>().manager);
                 let handle = std::thread::spawn(move || {
                     read_manager(&manager).shutdown();

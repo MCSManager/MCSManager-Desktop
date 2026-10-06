@@ -1,0 +1,21 @@
+# The desktop shell always runs from a loopback HTTP origin in release builds,
+# which Tauri treats as a remote origin. Remote origins must explicitly allow
+# application commands through a capability, so this permission backs the
+# `allow-desktop-commands` entry referenced by both the local capability and the
+# runtime loopback capability.
+
+[[permission]]
+identifier = "allow-desktop-commands"
+description = "Allow the desktop shell to read the app configuration and control the MCSManager services."
+commands.allow = [
+    "get_config",
+    "save_config",
+    "get_service_statuses",
+    "start_service",
+    "stop_service",
+    "restart_service",
+    "start_all_services",
+    "stop_all_services",
+    "probe_tcp",
+    "get_app_info",
+]

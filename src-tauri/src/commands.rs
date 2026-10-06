@@ -416,11 +416,18 @@ mod tests {
         assert_eq!(busy_b.state, ServiceState::Running);
 
         stopper.join().expect("stop thread must not panic");
-        let final_state = read_manager(&manager)
-            .status("busy-a")
-            .expect("busy-a status")
-            .state;
-        assert_eq!(final_state, ServiceState::Stopped);
+        // The force-kill can land shortly after stop() returns, so let the state
+        // settle like process::managed::tests::stop_force_kills_after_timeout does.
+        let stopped = wait_until(Duration::from_secs(30), || {
+            read_manager(&manager)
+                .status("busy-a")
+                .map(|status| status.state == ServiceState::Stopped)
+                .unwrap_or(false)
+        });
+        assert!(
+            stopped,
+            "busy-a must settle to Stopped after the stop request completes"
+        );
         read_manager(&manager).shutdown();
     }
 }

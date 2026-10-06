@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { I18nProvider } from "./i18n";
 import { BrowserTab } from "./components/browser/BrowserTab";
 import { Dashboard } from "./components/dashboard/Dashboard";
@@ -9,47 +9,72 @@ import { SettingsModal } from "./components/settings/SettingsModal";
 import { useConfig } from "./hooks/useConfig";
 import { useReadiness } from "./hooks/useReadiness";
 import { useServices } from "./hooks/useServices";
+import { useStartup, DEFAULT_SETTLE_DELAY_MS } from "./hooks/useStartup";
 import { openExternal } from "./services/openExternal";
 import { BridgeProvider, bridge as realBridge, type Bridge } from "./services/bridge";
 
 const DEFAULT_PANEL_URL = "http://localhost:23333";
 const HOST = "127.0.0.1";
 
-function AppShell() {
-  const [tab, setTab] = useState<TabId>("dashboard");
+function AppShell({ settleDelayMs }: { settleDelayMs?: number }) {
+  const [tab, setTab] = useState<TabId>("panel");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const { config, warnings, saving, error, save } = useConfig();
-  const { statuses, start, startAll, stopAll } = useServices(config?.maxLogLines ?? 2000);
+  const { statuses, startAll, stopAll } = useServices(config?.maxLogLines ?? 2000);
   const busy = Object.values(statuses).some(
     (status) => status.state === "starting" || status.state === "stopping",
   );
+  const hasActiveServices = Object.values(statuses).some(
+    (status) =>
+      status.state === "starting" || status.state === "running" || status.state === "stopping",
+  );
   const panelUrl = config?.panelUrl ?? DEFAULT_PANEL_URL;
+  const panelEnabled = config?.services.panel.enabled !== false;
   const panelState = statuses["panel"]?.state ?? "stopped";
   const panelPort = config?.services.panel.readyPort ?? null;
   const panelReady = useReadiness(HOST, panelPort, panelState === "running");
+  const webReady = panelPort == null || panelReady;
+
+  const requiredIds = useMemo(
+    () => (["daemon", "panel"] as const).filter((id) => config?.services[id].enabled !== false),
+    [config],
+  );
+
+  const startup = useStartup({
+    statuses,
+    requiredIds,
+    webReady,
+    startAll,
+    settleDelayMs: settleDelayMs ?? DEFAULT_SETTLE_DELAY_MS,
+  });
+  const panelPhase = panelEnabled ? startup.phase : "idle";
+  const showConsole = useCallback(() => setTab("dashboard"), []);
 
   return (
     <div className="app-shell">
       <main className="app-main">
-        {tab === "dashboard" ? (
+        <div className="app-pane" hidden={tab !== "dashboard"}>
           <Dashboard />
-        ) : (
+        </div>
+        <div className="app-pane" hidden={tab !== "panel"}>
           <BrowserTab
             url={panelUrl}
-            ready={panelState === "running" && panelPort != null ? panelReady : null}
-            serviceState={panelState}
-            onStartPanel={() => void start("panel")}
+            phase={panelPhase}
+            errorMessage={startup.error}
+            onStart={startup.start}
+            onShowConsole={showConsole}
           />
-        )}
+        </div>
       </main>
       <TopBar
         activeTab={tab}
         onTabChange={setTab}
-        onStartAll={() => void startAll()}
+        onStartAll={startup.start}
         onStopAll={() => void stopAll()}
         onOpenSettings={() => setSettingsOpen(true)}
         onOpenExternal={() => void openExternal(panelUrl).catch(() => {})}
         busy={busy}
+        hasActiveServices={hasActiveServices}
       />
       <SettingsModal
         open={settingsOpen}
@@ -65,11 +90,17 @@ function AppShell() {
   );
 }
 
-export default function App({ bridge: injected }: { bridge?: Bridge }) {
+export default function App({
+  bridge: injected,
+  settleDelayMs,
+}: {
+  bridge?: Bridge;
+  settleDelayMs?: number;
+}) {
   return (
     <BridgeProvider bridge={injected ?? realBridge}>
       <I18nProvider>
-        <AppShell />
+        <AppShell settleDelayMs={settleDelayMs} />
       </I18nProvider>
     </BridgeProvider>
   );

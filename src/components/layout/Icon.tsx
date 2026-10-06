@@ -1,7 +1,17 @@
 import type { ReactNode } from "react";
 
 export type IconName =
-  "play" | "stop" | "restart" | "settings" | "globe" | "external" | "copy" | "trash" | "logo";
+  | "play"
+  | "stop"
+  | "restart"
+  | "settings"
+  | "globe"
+  | "external"
+  | "copy"
+  | "trash"
+  | "logo"
+  | "alert"
+  | "terminal";
 
 function shapeFor(name: IconName): ReactNode {
   switch (name) {
@@ -146,6 +156,53 @@ function shapeFor(name: IconName): ReactNode {
           strokeLinecap="round"
           strokeLinejoin="round"
         />
+      );
+    case "alert":
+      return (
+        <>
+          <path
+            d="M8 2.6 14.4 13.2H1.6z"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.4"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          <path d="M8 6.3v3.1" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+          <circle cx="8" cy="11.2" r="0.85" fill="currentColor" />
+        </>
+      );
+    case "terminal":
+      return (
+        <>
+          <rect
+            x="1.8"
+            y="2.8"
+            width="12.4"
+            height="10.4"
+            rx="1.8"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.4"
+          />
+          <polyline
+            points="4.6,6.1 6.8,8 4.6,9.9"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.4"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          <line
+            x1="8.3"
+            y1="10"
+            x2="11.3"
+            y2="10"
+            stroke="currentColor"
+            strokeWidth="1.4"
+            strokeLinecap="round"
+          />
+        </>
       );
   }
 }

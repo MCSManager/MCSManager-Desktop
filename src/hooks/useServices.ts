@@ -7,11 +7,11 @@ import { getServicesStore, type ServicesState } from "../state/serviceStore";
 export interface UseServicesResult {
   statuses: ServicesState["statuses"];
   outputs: Record<string, ConsoleLine[]>;
-  start: (id: string) => Promise<void>;
-  stop: (id: string) => Promise<void>;
-  restart: (id: string) => Promise<void>;
-  startAll: () => Promise<void>;
-  stopAll: () => Promise<void>;
+  start: (id: string) => Promise<string | null>;
+  stop: (id: string) => Promise<string | null>;
+  restart: (id: string) => Promise<string | null>;
+  startAll: () => Promise<string | null>;
+  stopAll: () => Promise<string | null>;
   clearOutput: (id: string) => void;
   actionError: string | null;
 }
@@ -47,12 +47,15 @@ export function useServices(maxLines?: number): UseServicesResult {
     );
   }, [bridge, store]);
 
-  const run = useCallback(async (action: () => Promise<void>) => {
+  const run = useCallback(async (action: () => Promise<void>): Promise<string | null> => {
     try {
       await action();
       setActionError(null);
+      return null;
     } catch (error) {
-      setActionError(errorMessage(error));
+      const message = errorMessage(error);
+      setActionError(message);
+      return message;
     }
   }, []);
 
