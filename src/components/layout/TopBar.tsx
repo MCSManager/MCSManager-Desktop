@@ -24,8 +24,8 @@ export function TopBar({
 }) {
   const { t, language, setLanguage } = useI18n();
   const tabs: { id: TabId; label: string }[] = [
-    { id: "dashboard", label: t("tab.dashboard") },
     { id: "panel", label: t("tab.panel") },
+    { id: "dashboard", label: t("tab.dashboard") },
   ];
 
   return (
@@ -40,7 +40,7 @@ export function TopBar({
         ) : null}
       </div>
       <div className="topbar-actions">
-        <LanguageSwitcher language={language} onChange={setLanguage} />
+
         {hasActiveServices ? (
           <button
             type="button"
@@ -62,6 +62,7 @@ export function TopBar({
             <span>{t("action.startAll")}</span>
           </button>
         )}
+        <LanguageSwitcher language={language} onChange={setLanguage} />
         <button
           type="button"
           className="topbar-btn topbar-btn--icon"
