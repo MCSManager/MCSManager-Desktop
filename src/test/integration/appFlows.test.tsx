@@ -60,7 +60,7 @@ describe("app integration flows", () => {
     });
     const frame = screen.getByTitle(en["tab.panel"]);
     expect(frame.tagName).toBe("IFRAME");
-    expect(frame).toHaveAttribute("src", mock.config.panelUrl);
+    expect(frame).toHaveAttribute("src", `${mock.config.panelUrl}?__mcsmanager_app=1`);
   });
 
   it("waits for the settle delay before entering the web page", async () => {
@@ -99,7 +99,8 @@ describe("app integration flows", () => {
 
     expect(screen.getByRole("alert")).toBeInTheDocument();
     expect(screen.getByText(en["browser.startupFailed.title"])).toBeInTheDocument();
-    expect(screen.getByText("process exited with code 1")).toBeInTheDocument();
+    const panelView = document.querySelector("section.browser") as HTMLElement;
+    expect(within(panelView).getByText("process exited with code 1")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: en["browser.startupFailed.openConsole"] }));
     expect(screen.getByTestId("service-card-daemon")).toBeInTheDocument();
@@ -127,7 +128,8 @@ describe("app integration flows", () => {
     });
 
     expect(screen.getByText(en["browser.startupFailed.title"])).toBeInTheDocument();
-    expect(screen.getByText("service directory missing")).toBeInTheDocument();
+    const panelView = document.querySelector("section.browser") as HTMLElement;
+    expect(within(panelView).getByText("service directory missing")).toBeInTheDocument();
   });
 
   it("browser overlay start shortcut boots all services", async () => {
@@ -254,10 +256,33 @@ describe("app integration flows", () => {
     await openConsole(user);
     expect(screen.getByTestId("service-card-daemon")).toBeInTheDocument();
     expect(screen.getByTestId("service-card-panel")).toBeInTheDocument();
-    expect(screen.queryByTitle(en["tab.panel"])).not.toBeInTheDocument();
+    expect(screen.getByTitle(en["tab.panel"])).not.toBeVisible();
 
     await user.click(screen.getByRole("tab", { name: en["tab.panel"] }));
-    expect(screen.getByTitle(en["tab.panel"])).toBeInTheDocument();
+    expect(screen.getByTitle(en["tab.panel"])).toBeVisible();
+  });
+
+  it("tabs keep panel and dashboard alive across switches", async () => {
+    const user = userEvent.setup();
+    const mock = createMockBridge();
+    await renderReadyApp(mock);
+
+    await act(async () => {
+      mock.emitStatus({ id: "daemon", state: "running", pid: 23332, startedAt: 1700000000000 });
+      mock.emitStatus({ id: "panel", state: "running", pid: 23333, startedAt: 1700000000000 });
+    });
+    await waitFor(() => {
+      expect(screen.getByTitle(en["tab.panel"])).toBeInTheDocument();
+    });
+
+    const frame = screen.getByTitle(en["tab.panel"]);
+    const card = screen.getByTestId("service-card-daemon");
+
+    await openConsole(user);
+    expect(screen.getByTestId("service-card-daemon")).toBe(card);
+
+    await user.click(screen.getByRole("tab", { name: en["tab.panel"] }));
+    expect(screen.getByTitle(en["tab.panel"])).toBe(frame);
   });
 
   it("app keeps probing panel readiness", async () => {
@@ -270,7 +295,8 @@ describe("app integration flows", () => {
     await waitFor(() => {
       expect(mock.calls).toContainEqual({ name: "probeTcp", args: ["127.0.0.1", 23333, 1000] });
     });
-    expect(screen.queryByText(en["status.ready"])).not.toBeInTheDocument();
+    const panelView = document.querySelector("section.browser") as HTMLElement;
+    expect(within(panelView).queryByText(en["status.ready"])).not.toBeInTheDocument();
   });
 
   it("settings round-trip saves through bridge", async () => {
@@ -303,7 +329,10 @@ describe("app integration flows", () => {
       mock.emitStatus({ id: "panel", state: "running", pid: 23333, startedAt: 1700000000000 });
     });
     await waitFor(() => {
-      expect(screen.getByTitle(en["tab.panel"])).toHaveAttribute("src", "http://127.0.0.1:30000");
+      expect(screen.getByTitle(en["tab.panel"])).toHaveAttribute(
+        "src",
+        "http://127.0.0.1:30000?__mcsmanager_app=1",
+      );
     });
   });
 

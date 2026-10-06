@@ -156,6 +156,7 @@ describe("layout", () => {
     await waitFor(() => {
       expect(screen.getByTitle(en["tab.panel"])).toBeInTheDocument();
     });
-    expect(screen.queryByTestId("service-card-daemon")).not.toBeInTheDocument();
+    expect(screen.getByTestId("service-card-daemon")).not.toBeVisible();
+    expect(screen.getByTitle(en["tab.panel"])).toBeVisible();
   });
 });

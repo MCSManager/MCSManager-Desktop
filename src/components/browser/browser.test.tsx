@@ -33,7 +33,15 @@ describe("browser", () => {
     renderTab({ url: "http://localhost:23333", phase: "ready" });
     const frame = screen.getByTitle(en["tab.panel"]);
     expect(frame.tagName).toBe("IFRAME");
-    expect(frame).toHaveAttribute("src", "http://localhost:23333");
+    expect(frame).toHaveAttribute("src", "http://localhost:23333?__mcsmanager_app=1");
+  });
+
+  it("browser_tab_keeps_existing_query_when_marking_app_mode", () => {
+    renderTab({ url: "http://localhost:23333/?foo=1", phase: "ready" });
+    expect(screen.getByTitle(en["tab.panel"])).toHaveAttribute(
+      "src",
+      "http://localhost:23333/?foo=1&__mcsmanager_app=1",
+    );
   });
 
   it("browser_tab_shows_loading_skeleton_while_booting", () => {

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { I18nProvider } from "./i18n";
 import { BrowserTab } from "./components/browser/BrowserTab";
 import { Dashboard } from "./components/dashboard/Dashboard";
@@ -48,21 +48,23 @@ function AppShell({ settleDelayMs }: { settleDelayMs?: number }) {
     settleDelayMs: settleDelayMs ?? DEFAULT_SETTLE_DELAY_MS,
   });
   const panelPhase = panelEnabled ? startup.phase : "idle";
+  const showConsole = useCallback(() => setTab("dashboard"), []);
 
   return (
     <div className="app-shell">
       <main className="app-main">
-        {tab === "dashboard" ? (
+        <div className="app-pane" hidden={tab !== "dashboard"}>
           <Dashboard />
-        ) : (
+        </div>
+        <div className="app-pane" hidden={tab !== "panel"}>
           <BrowserTab
             url={panelUrl}
             phase={panelPhase}
             errorMessage={startup.error}
             onStart={startup.start}
-            onShowConsole={() => setTab("dashboard")}
+            onShowConsole={showConsole}
           />
-        )}
+        </div>
       </main>
       <TopBar
         activeTab={tab}

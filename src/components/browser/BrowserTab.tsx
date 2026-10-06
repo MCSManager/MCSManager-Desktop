@@ -1,3 +1,4 @@
+import { memo } from "react";
 import type { PanelPhase } from "../../hooks/useStartup";
 import { useI18n } from "../../i18n";
 import { Icon } from "../layout/Icon";
@@ -10,16 +11,23 @@ export interface BrowserTabProps {
   onShowConsole: () => void;
 }
 
-function StartupSkeleton() {
+const APP_MODE_PARAM = "__mcsmanager_app";
+
+function buildFrameSrc(url: string): string {
+  const hashIndex = url.indexOf("#");
+  const base = hashIndex >= 0 ? url.slice(0, hashIndex) : url;
+  const hash = hashIndex >= 0 ? url.slice(hashIndex) : "";
+  if (base.includes(`${APP_MODE_PARAM}=`)) {
+    return url;
+  }
+  const separator = base.includes("?") ? "&" : "?";
+  return `${base}${separator}${APP_MODE_PARAM}=1${hash}`;
+}
+
+function StartupOverlay() {
   const { t } = useI18n();
   return (
     <div className="browser-overlay" role="status" aria-live="polite">
-      <div className="startup-skeleton" aria-hidden="true">
-        <div className="skeleton-bar skeleton-bar--title" />
-        <div className="skeleton-bar" />
-        <div className="skeleton-bar" />
-        <div className="skeleton-bar skeleton-bar--short" />
-      </div>
       <div className="startup-spinner" aria-hidden="true" />
       <h2 className="browser-overlay-title">{t("browser.starting.title")}</h2>
       <p className="browser-overlay-hint">{t("browser.starting.hint")}</p>
@@ -80,14 +88,20 @@ function NotRunning({ onStart }: { onStart: () => void }) {
   );
 }
 
-export function BrowserTab({ url, phase, errorMessage, onStart, onShowConsole }: BrowserTabProps) {
+export const BrowserTab = memo(function BrowserTab({
+  url,
+  phase,
+  errorMessage,
+  onStart,
+  onShowConsole,
+}: BrowserTabProps) {
   const { t } = useI18n();
 
   return (
     <section className="browser">
       <div className="browser-content">
         {phase === "ready" ? (
-          <iframe className="browser-frame" title={t("tab.panel")} src={url} />
+          <iframe className="browser-frame" title={t("tab.panel")} src={buildFrameSrc(url)} />
         ) : phase === "failed" ? (
           <StartupFailed
             message={errorMessage ?? null}
@@ -97,9 +111,9 @@ export function BrowserTab({ url, phase, errorMessage, onStart, onShowConsole }:
         ) : phase === "idle" ? (
           <NotRunning onStart={onStart} />
         ) : (
-          <StartupSkeleton />
+          <StartupOverlay />
         )}
       </div>
     </section>
   );
-}
+});

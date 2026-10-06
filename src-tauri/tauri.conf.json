@@ -16,7 +16,10 @@
         "width": 1400,
         "height": 960,
         "minWidth": 1024,
-        "minHeight": 680
+        "minHeight": 680,
+        "useHttpsScheme": false,
+        "devtools": true,
+        "additionalBrowserArgs": "--disable-web-security --disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection,SameSiteByDefaultCookies,CookiesWithoutSameSiteMustBeSecure,ThirdPartyCookiePhaseout,TrackingProtection3pcd,ThirdPartyStoragePartitioning"
       }
     ],
     "security": {

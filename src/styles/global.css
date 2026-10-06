@@ -73,6 +73,17 @@ button {
   overflow: hidden;
 }
 
+.app-pane {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.app-pane[hidden] {
+  display: none;
+}
+
 .dashboard {
   display: flex;
   flex-direction: column;
@@ -616,45 +627,6 @@ button {
 .browser-start:disabled {
   opacity: 0.55;
   cursor: not-allowed;
-}
-
-.startup-skeleton {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  width: min(420px, 82%);
-  padding: 18px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: var(--surface);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28);
-}
-
-.skeleton-bar {
-  height: 10px;
-  border-radius: 6px;
-  background: linear-gradient(90deg, var(--surface-2) 25%, var(--border) 50%, var(--surface-2) 75%);
-  background-size: 200% 100%;
-  animation: skeleton-shimmer 1.4s ease-in-out infinite;
-}
-
-.skeleton-bar--title {
-  width: 42%;
-  height: 14px;
-}
-
-.skeleton-bar--short {
-  width: 64%;
-}
-
-@keyframes skeleton-shimmer {
-  0% {
-    background-position: 200% 0;
-  }
-
-  100% {
-    background-position: -200% 0;
-  }
 }
 
 .startup-spinner {

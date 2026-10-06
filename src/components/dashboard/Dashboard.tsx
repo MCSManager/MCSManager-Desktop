@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { useConfig } from "../../hooks/useConfig";
 import { useReadiness } from "../../hooks/useReadiness";
 import { useServices } from "../../hooks/useServices";
@@ -17,7 +18,7 @@ function isBusy(status: ServiceStatus): boolean {
   return status.state === "starting" || status.state === "stopping";
 }
 
-export function Dashboard() {
+export const Dashboard = memo(function Dashboard() {
   const { statuses, outputs, start, stop, restart, actionError } = useServices();
   const { config } = useConfig();
 
@@ -70,4 +71,4 @@ export function Dashboard() {
       </div>
     </div>
   );
-}
+});
