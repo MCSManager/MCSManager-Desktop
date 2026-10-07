@@ -1,5 +1,7 @@
 # MCSManager Desktop
 
+[English](README.md) | [简体中文](README.zh-CN.md)
+
 A Windows desktop shell for running [MCSManager](https://github.com/MCSManager/MCSManager) locally.
 It starts and stops your MCSManager daemon and panel as child processes, streams their live
 console output, and embeds the panel web UI in a tabbed window. Built with Tauri v2 (Rust)
@@ -13,7 +15,7 @@ and React 19 + TypeScript.
   `daemon/` and `web/` (each containing `app.js`, as produced by the MCSManager release
   bundle or `build.bat`)
 
-## Service layout (fixed)
+## Service layout
 
 Service directories are fixed relative to the **run directory** — the folder containing
 `mcsmanager-desktop.exe` (in development, the project root):
@@ -69,3 +71,8 @@ npm run typecheck     # tsc --noEmit
 npm run lint          # eslint
 npm run format:check  # prettier
 ```
+
+## Acknowledgements
+
+Thanks to Mimir (https://github.com/parkes-mimir/) for providing Token support to this
+project, which greatly accelerated our pace in building the MCSManager ecosystem.
