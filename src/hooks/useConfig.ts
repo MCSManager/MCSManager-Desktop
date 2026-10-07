@@ -6,6 +6,8 @@ import type { AppConfig } from "../types";
 export interface UseConfigResult {
   config: AppConfig | null;
   warnings: string[];
+  pathIssues: string[];
+  loaded: boolean;
   saving: boolean;
   error: string | null;
   save: (next: AppConfig) => Promise<void>;
@@ -21,8 +23,9 @@ export function useConfig(): UseConfigResult {
   const store = getConfigStore();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [loaded, setLoaded] = useState(false);
 
-  const { config, warnings } = useSyncExternalStore(
+  const { config, warnings, pathIssues } = useSyncExternalStore(
     store.subscribe,
     store.getState,
     store.getState,
@@ -43,9 +46,11 @@ export function useConfig(): UseConfigResult {
       (response) => {
         store.applyLoaded(response);
         setError(null);
+        setLoaded(true);
       },
       (loadError: unknown) => {
         setError(errorMessage(loadError));
+        setLoaded(true);
       },
     );
   }, [bridge, store]);
@@ -66,5 +71,5 @@ export function useConfig(): UseConfigResult {
     [bridge, reload],
   );
 
-  return { config, warnings, saving, error, save, reload };
+  return { config, warnings, pathIssues, loaded, saving, error, save, reload };
 }

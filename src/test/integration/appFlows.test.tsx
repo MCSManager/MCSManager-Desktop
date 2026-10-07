@@ -430,4 +430,80 @@ describe("app integration flows", () => {
     expect(rendered.length).toBeLessThanOrEqual(5);
     expect(within(card).getByText("cap-9")).toBeInTheDocument();
   });
+
+  it("warns about missing service files at startup and skips auto-start", async () => {
+    const user = userEvent.setup();
+    const mock = createMockBridge();
+    mock.getConfig = () =>
+      Promise.resolve({
+        config: structuredClone(mock.config),
+        warnings: [],
+        pathIssues: ["[daemon] script is not an existing file: daemon/app.js"],
+      });
+    renderApp(mock);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("missing-files-dialog")).toBeInTheDocument();
+    });
+    expect(screen.getByText(en["error.missingFiles.message"])).toBeInTheDocument();
+    expect(mock.calls.some((call) => call.name === "startAll")).toBe(false);
+
+    await user.click(screen.getByRole("button", { name: en["action.ok"] }));
+    expect(screen.queryByTestId("missing-files-dialog")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: en["action.startAll"] })).toBeInTheDocument();
+  });
+
+  it("asks before freeing an occupied port during startup and frees it on confirm", async () => {
+    const user = userEvent.setup();
+    const mock = createMockBridge({
+      checkStartConflict: (id) => Promise.resolve(id === "panel" ? 23333 : null),
+    });
+    renderApp(mock);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("port-conflict-dialog")).toBeInTheDocument();
+    });
+    expect(
+      screen.getByText(en["portConflict.message"].replace("{port}", "23333")),
+    ).toBeInTheDocument();
+    expect(mock.calls.some((call) => call.name === "startAll")).toBe(false);
+
+    await user.click(screen.getByRole("button", { name: en["portConflict.confirm"] }));
+    await waitFor(() => {
+      expect(mock.calls).toContainEqual({ name: "forceFreePort", args: [23333] });
+    });
+    await waitFor(() => {
+      expect(mock.calls).toContainEqual({ name: "startAll", args: [] });
+    });
+  });
+
+  it("aborts startup when the port conflict is declined", async () => {
+    const user = userEvent.setup();
+    const mock = createMockBridge({
+      checkStartConflict: () => Promise.resolve(24444),
+    });
+    renderApp(mock);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("port-conflict-dialog")).toBeInTheDocument();
+    });
+    await user.click(screen.getByRole("button", { name: en["portConflict.cancel"] }));
+
+    await waitFor(() => {
+      expect(screen.getByText(en["browser.notRunning.title"])).toBeInTheDocument();
+    });
+    expect(mock.calls.some((call) => call.name === "forceFreePort")).toBe(false);
+    expect(mock.calls.some((call) => call.name === "startAll")).toBe(false);
+  });
+
+  it("still auto-starts when the config fails to load", async () => {
+    const mock = createMockBridge({
+      getConfig: () => Promise.reject(new Error("config unavailable")),
+    });
+    renderApp(mock);
+
+    await waitFor(() => {
+      expect(mock.calls).toContainEqual({ name: "startAll", args: [] });
+    });
+  });
 });

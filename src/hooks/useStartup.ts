@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useBridge } from "../services/bridge";
+import { START_CANCELLED } from "../services/portGate";
 import type { ServiceState, ServiceStatus } from "../types";
 
 export type PanelPhase = "booting" | "settling" | "ready" | "failed" | "idle";
@@ -18,6 +19,8 @@ export interface UseStartupOptions {
   settleDelayMs?: number;
   readyTimeoutMs?: number;
   bootTimeoutMs?: number;
+  blocked?: boolean;
+  ready?: boolean;
 }
 
 export interface UseStartupResult {
@@ -34,6 +37,8 @@ export function useStartup({
   settleDelayMs = DEFAULT_SETTLE_DELAY_MS,
   readyTimeoutMs = DEFAULT_READY_TIMEOUT_MS,
   bootTimeoutMs = DEFAULT_BOOT_TIMEOUT_MS,
+  blocked = false,
+  ready = true,
 }: UseStartupOptions): UseStartupResult {
   const bridge = useBridge();
   const [phase, setPhase] = useState<PanelPhase>("booting");
@@ -64,23 +69,36 @@ export function useStartup({
     sawActivityRef.current = false;
     prevStatesRef.current = {};
     setError(null);
+    if (blocked) {
+      managedRef.current = false;
+      setPhase("idle");
+      return;
+    }
     setPhase("booting");
     const bootId = bootIdRef.current;
     void startAll().then((message) => {
-      if (message != null && bootIdRef.current === bootId) {
+      if (bootIdRef.current !== bootId) {
+        return;
+      }
+      if (message === START_CANCELLED) {
+        managedRef.current = false;
+        setPhase("idle");
+        return;
+      }
+      if (message != null) {
         setPhase("failed");
         setError(message);
       }
     });
-  }, [startAll]);
+  }, [startAll, blocked]);
 
   useEffect(() => {
-    if (autoStartedRef.current) {
+    if (!ready || autoStartedRef.current) {
       return;
     }
     autoStartedRef.current = true;
     start();
-  }, [start]);
+  }, [ready, start]);
 
   useEffect(() => bridge.onError((event) => fail(event.message)), [bridge, fail]);
 

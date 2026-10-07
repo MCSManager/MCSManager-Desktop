@@ -3,6 +3,7 @@ import type { AppConfig, ConfigResponse } from "../types";
 export interface ConfigState {
   config: AppConfig | null;
   warnings: string[];
+  pathIssues: string[];
 }
 
 export interface ConfigStore {
@@ -12,7 +13,7 @@ export interface ConfigStore {
 }
 
 export function createConfigStore(): ConfigStore {
-  let state: ConfigState = { config: null, warnings: [] };
+  let state: ConfigState = { config: null, warnings: [], pathIssues: [] };
   const listeners = new Set<() => void>();
 
   function notify(): void {
@@ -32,7 +33,11 @@ export function createConfigStore(): ConfigStore {
       };
     },
     applyLoaded(response: ConfigResponse): void {
-      state = { config: response.config, warnings: response.warnings };
+      state = {
+        config: response.config,
+        warnings: response.warnings,
+        pathIssues: response.pathIssues ?? [],
+      };
       notify();
     },
   };

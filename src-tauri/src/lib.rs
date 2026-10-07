@@ -170,6 +170,8 @@ pub fn run() {
             commands::start_all_services,
             commands::stop_all_services,
             commands::probe_tcp,
+            commands::check_start_conflict,
+            commands::force_free_port,
             commands::get_app_info,
         ])
         .on_window_event(move |window, event| {

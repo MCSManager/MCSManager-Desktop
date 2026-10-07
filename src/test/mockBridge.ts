@@ -71,7 +71,7 @@ export function createMockBridge(overrides?: Partial<Bridge>): MockBridge {
       if (overrides?.getConfig) {
         return overrides.getConfig();
       }
-      return { config: structuredClone(mock.config), warnings: [] };
+      return { config: structuredClone(mock.config), warnings: [], pathIssues: [] };
     },
     async saveConfig(config: AppConfig): Promise<void> {
       calls.push({ name: "saveConfig", args: [config] });
@@ -123,6 +123,19 @@ export function createMockBridge(overrides?: Partial<Bridge>): MockBridge {
         return overrides.probeTcp(host, port, timeoutMs);
       }
       return true;
+    },
+    async checkStartConflict(id: string): Promise<number | null> {
+      calls.push({ name: "checkStartConflict", args: [id] });
+      if (overrides?.checkStartConflict) {
+        return overrides.checkStartConflict(id);
+      }
+      return null;
+    },
+    async forceFreePort(port: number): Promise<void> {
+      calls.push({ name: "forceFreePort", args: [port] });
+      if (overrides?.forceFreePort) {
+        return overrides.forceFreePort(port);
+      }
     },
     async getAppInfo(): Promise<AppInfo> {
       calls.push({ name: "getAppInfo", args: [] });

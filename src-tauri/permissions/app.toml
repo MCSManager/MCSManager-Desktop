@@ -17,5 +17,7 @@ commands.allow = [
     "start_all_services",
     "stop_all_services",
     "probe_tcp",
+    "check_start_conflict",
+    "force_free_port",
     "get_app_info",
 ]

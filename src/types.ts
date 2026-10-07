@@ -45,6 +45,7 @@ export interface AppConfig {
 export interface ConfigResponse {
   config: AppConfig;
   warnings: string[];
+  pathIssues: string[];
 }
 
 export interface AppInfo {

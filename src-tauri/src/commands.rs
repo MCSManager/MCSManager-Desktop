@@ -9,6 +9,7 @@ use tauri::{Emitter, State};
 use crate::config::{self, AppConfig, ConfigError, ServiceConfig};
 use crate::process::events::{EventSink, OutputStream, ProcessEvent, ProcessSpec, ServiceStatus};
 use crate::process::manager::ProcessManager;
+use crate::process::net_port;
 
 pub struct AppState {
     pub manager: Arc<RwLock<ProcessManager>>,
@@ -22,6 +23,7 @@ pub struct AppState {
 pub struct ConfigResponse {
     pub config: AppConfig,
     pub warnings: Vec<String>,
+    pub path_issues: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -144,12 +146,21 @@ where
     }
 }
 
+fn config_response(config: &AppConfig, startup_warnings: Vec<String>) -> ConfigResponse {
+    let path_issues = config.path_issues();
+    let mut warnings = startup_warnings;
+    warnings.extend(path_issues.iter().cloned());
+    ConfigResponse {
+        config: config.clone(),
+        warnings,
+        path_issues,
+    }
+}
+
 #[tauri::command]
 pub fn get_config(state: State<'_, AppState>) -> ConfigResponse {
     let config = lock_config(&state.config).clone();
-    let mut warnings = state.startup_warnings.clone();
-    warnings.extend(config.path_issues());
-    ConfigResponse { config, warnings }
+    config_response(&config, state.startup_warnings.clone())
 }
 
 #[tauri::command]
@@ -182,6 +193,63 @@ pub fn probe_tcp(host: String, port: u16, timeout_ms: u64) -> bool {
         .next()
         .map(|addr| TcpStream::connect_timeout(&addr, Duration::from_millis(timeout_ms)).is_ok())
         .unwrap_or(false)
+}
+
+/// PIDs that must never be terminated by the port guard: this app process and
+/// every service it manages.
+fn protected_pids(state: &AppState) -> Vec<u32> {
+    let mut pids = vec![std::process::id()];
+    for status in read_manager(&state.manager).statuses() {
+        if let Some(pid) = status.pid {
+            pids.push(pid);
+        }
+    }
+    pids
+}
+
+/// Reports `port` as in conflict when a process that is not protected listens on
+/// it. A port that cannot be probed (missing platform tooling) is not a conflict.
+fn conflict_for_port(port: u16, protected: &[u32]) -> Option<u16> {
+    net_port::conflict_occupant(&net_port::probe_port(port), protected).map(|_| port)
+}
+
+/// Only configured `readyPort` values may be freed; anything else is rejected.
+fn is_configured_port(config: &AppConfig, port: u16) -> bool {
+    config
+        .services
+        .values()
+        .any(|service| service.ready_port == Some(port))
+}
+
+/// Returns the service's port when another program is occupying it.
+#[tauri::command]
+pub async fn check_start_conflict(
+    id: String,
+    state: State<'_, AppState>,
+) -> Result<Option<u16>, String> {
+    let port = {
+        let config = lock_config(&state.config);
+        config.services.get(&id).and_then(|service| service.ready_port)
+    };
+    let Some(port) = port else {
+        return Ok(None);
+    };
+    let protected = protected_pids(&state);
+    run_blocking(move || Ok(conflict_for_port(port, &protected))).await
+}
+
+/// Force-frees a configured service port by gracefully terminating the program
+/// that occupies it, escalating to a forced tree-kill when needed.
+#[tauri::command]
+pub async fn force_free_port(port: u16, state: State<'_, AppState>) -> Result<(), String> {
+    {
+        let config = lock_config(&state.config);
+        if !is_configured_port(&config, port) {
+            return Err(format!("port {} is not a configured service port", port));
+        }
+    }
+    let protected = protected_pids(&state);
+    run_blocking(move || net_port::terminate_port_listener(port, &protected)).await
 }
 
 #[tauri::command]
@@ -262,6 +330,7 @@ mod tests {
     use super::*;
     use crate::process::events::ServiceState;
     use std::net::TcpListener;
+    use std::process::{Command, Stdio};
     use std::thread;
     use std::time::Instant;
 
@@ -297,6 +366,26 @@ mod tests {
             .status(id)
             .map(|status| status.state == ServiceState::Running && status.pid.is_some())
             .unwrap_or(false)
+    }
+
+    fn pick_free_port() -> u16 {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind ephemeral port");
+        listener.local_addr().expect("local addr").port()
+    }
+
+    fn spawn_node_listener(port: u16) -> std::process::Child {
+        let code = format!(
+            "const net=require('net');net.createServer().listen({},'127.0.0.1');setInterval(()=>{{}},1000);",
+            port
+        );
+        let mut cmd = Command::new("node");
+        cmd.args(["-e", &code])
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null());
+        let child = cmd.spawn().expect("spawn node listener");
+        thread::sleep(Duration::from_millis(200));
+        child
     }
 
     fn state_seen(events: &Arc<Mutex<Vec<ProcessEvent>>>, id: &str, state: ServiceState) -> bool {
@@ -355,6 +444,104 @@ mod tests {
         let port = listener.local_addr().expect("local addr").port();
         drop(listener);
         assert!(!probe_tcp("127.0.0.1".to_string(), port, 1000));
+    }
+
+    #[test]
+    fn config_response_exposes_path_issues() {
+        let mut config = AppConfig::default();
+        config
+            .services
+            .get_mut("daemon")
+            .expect("daemon service")
+            .script = "definitely-missing-script-xyz/app.js".to_string();
+
+        let response = config_response(&config, vec!["config recovered".to_string()]);
+
+        assert!(response.warnings.contains(&"config recovered".to_string()));
+        assert!(
+            response
+                .path_issues
+                .iter()
+                .any(|issue| issue.contains("definitely-missing-script-xyz")),
+            "path issues must include the missing script: {:?}",
+            response.path_issues
+        );
+        assert_eq!(
+            response.warnings.len(),
+            response.path_issues.len() + 1,
+            "path issues must also be surfaced as warnings"
+        );
+    }
+
+    #[test]
+    fn is_configured_port_matches_ready_ports() {
+        let config = AppConfig::default();
+        assert!(is_configured_port(&config, 23333));
+        assert!(is_configured_port(&config, 24444));
+        assert!(!is_configured_port(&config, 12345));
+
+        let mut without_panel_port = AppConfig::default();
+        without_panel_port
+            .services
+            .get_mut("panel")
+            .expect("panel service")
+            .ready_port = None;
+        assert!(!is_configured_port(&without_panel_port, 23333));
+    }
+
+    #[test]
+    fn conflict_for_port_detects_and_respects_protected() {
+        let port = pick_free_port();
+        let mut child = spawn_node_listener(port);
+        assert!(
+            wait_until(Duration::from_secs(5), || net_port::find_port_listener(port).is_some()),
+            "node listener must be detectable on port {}",
+            port
+        );
+        let pid = net_port::find_port_listener(port).expect("listener pid");
+
+        assert_eq!(conflict_for_port(port, &[]), Some(port));
+        assert_eq!(
+            conflict_for_port(port, &[pid]),
+            None,
+            "a protected listener must not count as a conflict"
+        );
+        let free = pick_free_port();
+        assert_eq!(conflict_for_port(free, &[]), None);
+
+        let _ = child.kill();
+        let _ = child.wait();
+    }
+
+    #[test]
+    fn protected_pids_include_self_and_managed_services() {
+        let sink: EventSink = Arc::new(|_event| {});
+        let mut manager = ProcessManager::new(sink, Duration::from_millis(300));
+        manager
+            .register(test_spec("guarded", LONG_RUN))
+            .expect("register guarded service");
+        manager.start("guarded").expect("start guarded service");
+        let manager = Arc::new(RwLock::new(manager));
+        let state = AppState {
+            manager,
+            config: Arc::new(Mutex::new(AppConfig::default())),
+            config_path: PathBuf::from("test-config.json"),
+            startup_warnings: Vec::new(),
+        };
+
+        let pids = protected_pids(&state);
+        assert!(pids.contains(&std::process::id()), "self must be protected");
+        let managed_pid = read_manager(&state.manager)
+            .status("guarded")
+            .expect("guarded status")
+            .pid
+            .expect("guarded pid");
+        assert!(
+            pids.contains(&managed_pid),
+            "managed service pid must be protected"
+        );
+
+        read_manager(&state.manager).shutdown();
     }
 
     #[test]

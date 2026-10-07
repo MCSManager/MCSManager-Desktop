@@ -1,7 +1,11 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { StrictMode, type ReactNode } from "react";
-import { act, cleanup, renderHook } from "@testing-library/react";
+import { act, cleanup, renderHook, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { BridgeProvider, type Bridge } from "../services/bridge";
+import { PortGuardProvider } from "../services/portGuard";
+import { I18nProvider } from "../i18n";
+import en from "../i18n/locales/en.json";
 import { resetServicesStore } from "../state/serviceStore";
 import { createMockBridge } from "../test/mockBridge";
 import type { ServiceStatus } from "../types";
@@ -11,7 +15,11 @@ function wrapperFor(bridge: Bridge) {
   return function Wrapper({ children }: { children: ReactNode }) {
     return (
       <StrictMode>
-        <BridgeProvider bridge={bridge}>{children}</BridgeProvider>
+        <I18nProvider initialLanguage="en">
+          <PortGuardProvider>
+            <BridgeProvider bridge={bridge}>{children}</BridgeProvider>
+          </PortGuardProvider>
+        </I18nProvider>
       </StrictMode>
     );
   };
@@ -161,5 +169,65 @@ describe("useServices", () => {
     });
     expect(result.current.statuses["panel"]?.state).toBe("stopped");
     unmount();
+  });
+
+  it("frees an occupied port after confirmation before starting", async () => {
+    const user = userEvent.setup();
+    const order: string[] = [];
+    const mock = createMockBridge({
+      checkStartConflict: vi.fn((id: string) => Promise.resolve(id === "daemon" ? 24444 : null)),
+      forceFreePort: vi.fn((port: number) => {
+        order.push(`free:${port}`);
+        return Promise.resolve();
+      }),
+      startService: vi.fn((id: string) => {
+        order.push(`start:${id}`);
+        return Promise.resolve();
+      }),
+    });
+    const { result } = renderHook(() => useServices(), { wrapper: wrapperFor(mock) });
+    await act(async () => {});
+
+    let pending: Promise<string | null> | undefined;
+    act(() => {
+      pending = result.current.start("daemon");
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("port-conflict-dialog")).toBeInTheDocument();
+    });
+    await user.click(screen.getByRole("button", { name: en["portConflict.confirm"] }));
+    await act(async () => {
+      await pending;
+    });
+
+    expect(order).toEqual(["free:24444", "start:daemon"]);
+    expect(result.current.actionError).toBeNull();
+  });
+
+  it("aborts the start when the port conflict is cancelled", async () => {
+    const user = userEvent.setup();
+    const mock = createMockBridge({
+      checkStartConflict: vi.fn(() => Promise.resolve(24444)),
+    });
+    const { result } = renderHook(() => useServices(), { wrapper: wrapperFor(mock) });
+    await act(async () => {});
+
+    let pending: Promise<string | null> | undefined;
+    act(() => {
+      pending = result.current.start("daemon");
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("port-conflict-dialog")).toBeInTheDocument();
+    });
+    await user.click(screen.getByRole("button", { name: en["portConflict.cancel"] }));
+    await act(async () => {
+      await pending;
+    });
+
+    expect(mock.calls.some((call) => call.name === "forceFreePort")).toBe(false);
+    expect(mock.calls.some((call) => call.name === "startService")).toBe(false);
+    expect(result.current.actionError).toBeNull();
   });
 });

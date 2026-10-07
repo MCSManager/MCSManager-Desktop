@@ -67,6 +67,8 @@ export interface Bridge {
   startAll(): Promise<void>;
   stopAll(): Promise<void>;
   probeTcp(host: string, port: number, timeoutMs: number): Promise<boolean>;
+  checkStartConflict(id: string): Promise<number | null>;
+  forceFreePort(port: number): Promise<void>;
   getAppInfo(): Promise<AppInfo>;
   onStatus(cb: (s: ServiceStatus) => void): () => void;
   onOutput(cb: (o: OutputLine) => void): () => void;
@@ -84,6 +86,8 @@ export const bridge: Bridge = {
   startAll: () => invoke<void>("start_all_services"),
   stopAll: () => invoke<void>("stop_all_services"),
   probeTcp: (host, port, timeoutMs) => invoke<boolean>("probe_tcp", { host, port, timeoutMs }),
+  checkStartConflict: (id) => invoke<number | null>("check_start_conflict", { id }),
+  forceFreePort: (port) => invoke<void>("force_free_port", { port }),
   getAppInfo: () => invoke<AppInfo>("get_app_info"),
   onStatus: (cb) =>
     listenTo("service-status", (raw: WireServiceStatus) => cb(normalizeStatus(raw))),

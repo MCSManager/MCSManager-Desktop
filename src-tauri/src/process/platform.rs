@@ -37,6 +37,31 @@ pub fn kill_tree(pid: u32) {
         .spawn();
 }
 
+/// Asks a process and its children to terminate gracefully before a forced
+/// tree-kill is attempted: `taskkill /T` on Windows (no `/F`), `SIGTERM` on
+/// Unix. This gives a well-behaved process the chance to release resources.
+pub fn kill_tree_graceful(pid: u32) {
+    let pid_arg = pid.to_string();
+    #[cfg(windows)]
+    let mut cmd = {
+        let mut cmd = Command::new("taskkill");
+        cmd.args(["/PID", pid_arg.as_str(), "/T"]);
+        cmd
+    };
+    #[cfg(not(windows))]
+    let mut cmd = {
+        let mut cmd = Command::new("kill");
+        cmd.args(["-TERM", pid_arg.as_str()]);
+        cmd
+    };
+    configure_command(&mut cmd);
+    let _ = cmd
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn();
+}
+
 pub fn now_millis() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -62,6 +87,11 @@ mod tests {
     #[test]
     fn kill_tree_ignores_unknown_pid() {
         kill_tree(4_000_000_000);
+    }
+
+    #[test]
+    fn kill_tree_graceful_ignores_unknown_pid() {
+        kill_tree_graceful(4_000_000_000);
     }
 
     #[test]

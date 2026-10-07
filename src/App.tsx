@@ -1,6 +1,7 @@
-import { useCallback, useMemo, useState } from "react";
-import { I18nProvider } from "./i18n";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { I18nProvider, useI18n } from "./i18n";
 import { BrowserTab } from "./components/browser/BrowserTab";
+import { AppDialog } from "./components/dialogs/AppDialog";
 import { Dashboard } from "./components/dashboard/Dashboard";
 import { ContextMenu } from "./components/layout/ContextMenu";
 import { TopBar } from "./components/layout/TopBar";
@@ -11,15 +12,19 @@ import { useReadiness } from "./hooks/useReadiness";
 import { useServices } from "./hooks/useServices";
 import { useStartup, DEFAULT_SETTLE_DELAY_MS } from "./hooks/useStartup";
 import { openExternal } from "./services/openExternal";
+import { PortGuardProvider } from "./services/portGuard";
 import { BridgeProvider, bridge as realBridge, type Bridge } from "./services/bridge";
 
 const DEFAULT_PANEL_URL = "http://localhost:23333";
 const HOST = "127.0.0.1";
 
 function AppShell({ settleDelayMs }: { settleDelayMs?: number }) {
+  const { t } = useI18n();
   const [tab, setTab] = useState<TabId>("panel");
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const { config, warnings, saving, error, save } = useConfig();
+  const [missingFilesOpen, setMissingFilesOpen] = useState(false);
+  const missingFilesShownRef = useRef(false);
+  const { config, warnings, pathIssues, loaded, saving, error, save } = useConfig();
   const { statuses, startAll, stopAll } = useServices(config?.maxLogLines ?? 2000);
   const busy = Object.values(statuses).some(
     (status) => status.state === "starting" || status.state === "stopping",
@@ -35,6 +40,17 @@ function AppShell({ settleDelayMs }: { settleDelayMs?: number }) {
   const panelReady = useReadiness(HOST, panelPort, panelState === "running");
   const webReady = panelPort == null || panelReady;
 
+  const filesMissing = config != null && pathIssues.length > 0;
+
+  // Surface missing service files (daemon/web or their app.js) exactly once per
+  // launch, and never fight the auto-start that `blocked` already suppresses.
+  useEffect(() => {
+    if (filesMissing && !missingFilesShownRef.current) {
+      missingFilesShownRef.current = true;
+      setMissingFilesOpen(true);
+    }
+  }, [filesMissing]);
+
   const requiredIds = useMemo(
     () => (["daemon", "panel"] as const).filter((id) => config?.services[id].enabled !== false),
     [config],
@@ -46,6 +62,8 @@ function AppShell({ settleDelayMs }: { settleDelayMs?: number }) {
     webReady,
     startAll,
     settleDelayMs: settleDelayMs ?? DEFAULT_SETTLE_DELAY_MS,
+    blocked: filesMissing,
+    ready: loaded,
   });
   const panelPhase = panelEnabled ? startup.phase : "idle";
   const showConsole = useCallback(() => setTab("dashboard"), []);
@@ -85,6 +103,15 @@ function AppShell({ settleDelayMs }: { settleDelayMs?: number }) {
         onSave={save}
         onClose={() => setSettingsOpen(false)}
       />
+      {missingFilesOpen ? (
+        <AppDialog
+          testId="missing-files-dialog"
+          title={t("error.missingFiles.title")}
+          message={t("error.missingFiles.message")}
+          confirmLabel={t("action.ok")}
+          onConfirm={() => setMissingFilesOpen(false)}
+        />
+      ) : null}
       <ContextMenu />
     </div>
   );
@@ -100,7 +127,9 @@ export default function App({
   return (
     <BridgeProvider bridge={injected ?? realBridge}>
       <I18nProvider>
-        <AppShell settleDelayMs={settleDelayMs} />
+        <PortGuardProvider>
+          <AppShell settleDelayMs={settleDelayMs} />
+        </PortGuardProvider>
       </I18nProvider>
     </BridgeProvider>
   );
