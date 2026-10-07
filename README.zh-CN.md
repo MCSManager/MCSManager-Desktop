@@ -2,6 +2,9 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
+![MCSManager Desktop](docs/page-1.jpg)
+![MCSManager Desktop](docs/page-2.jpg)
+
 一个用于在本地运行 [MCSManager](https://github.com/MCSManager/MCSManager) 的 Windows 桌面外壳。
 它将你的 MCSManager 守护进程（daemon）和面板（panel）作为子进程启动与停止，实时推送它们的
 控制台输出，并在标签页窗口中嵌入面板网页界面。基于 Tauri v2（Rust）与 React 19 + TypeScript 构建。

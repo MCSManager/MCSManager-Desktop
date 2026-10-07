@@ -1,6 +1,7 @@
 mod commands;
 pub mod config;
 pub mod process;
+pub mod tray;
 
 use std::sync::{Arc, Mutex, MutexGuard, RwLock};
 use std::time::Duration;
@@ -72,6 +73,7 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .plugin(
             tauri_plugin_localhost::Builder::new(localhost_port)
                 .host("127.0.0.1")
@@ -158,6 +160,8 @@ pub fn run() {
                     let _ = window.maximize();
                 }
             }
+
+            tray::setup(app.handle())?;
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -175,12 +179,24 @@ pub fn run() {
             commands::get_app_info,
         ])
         .on_window_event(move |window, event| {
-            if matches!(event, tauri::WindowEvent::Destroyed) && window.label() == WINDOW_LABEL {
-                let manager = Arc::clone(&window.state::<AppState>().manager);
-                let handle = std::thread::spawn(move || {
-                    read_manager(&manager).shutdown();
-                });
-                *lock_slot(&shutdown_on_close) = Some(handle);
+            match event {
+                // Closing the main window hides it to the tray instead of
+                // exiting: services keep running and "Exit" is the only
+                // intentional shutdown path.
+                tauri::WindowEvent::CloseRequested { api, .. }
+                    if window.label() == WINDOW_LABEL =>
+                {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
+                tauri::WindowEvent::Destroyed if window.label() == WINDOW_LABEL => {
+                    let manager = Arc::clone(&window.state::<AppState>().manager);
+                    let handle = std::thread::spawn(move || {
+                        read_manager(&manager).shutdown();
+                    });
+                    *lock_slot(&shutdown_on_close) = Some(handle);
+                }
+                _ => {}
             }
         })
         .build(tauri::generate_context!())

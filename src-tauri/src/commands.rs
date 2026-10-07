@@ -52,7 +52,10 @@ pub struct ErrorEvent {
 pub fn make_event_sink(app: tauri::AppHandle) -> EventSink {
     Arc::new(move |event| {
         let _ = match event {
-            ProcessEvent::Status(status) => app.emit("service-status", status),
+            ProcessEvent::Status(status) => {
+                crate::tray::update_status(&app, &status);
+                app.emit("service-status", status)
+            }
             ProcessEvent::Output {
                 id,
                 stream,
@@ -157,6 +160,32 @@ fn config_response(config: &AppConfig, startup_warnings: Vec<String>) -> ConfigR
     }
 }
 
+/// Starts every enabled service, skipping the ones already running.
+/// Shared by the `start_all_services` command and the tray menu.
+pub(crate) fn start_all_sync(
+    manager: &RwLock<ProcessManager>,
+    config: &Mutex<AppConfig>,
+) -> Result<(), String> {
+    let specs = enabled_specs(&lock_config(config));
+    let ids: Vec<String> = specs.iter().map(|spec| spec.id.clone()).collect();
+    {
+        let mut manager = write_manager(manager);
+        for spec in specs {
+            let _ = manager.register_or_update(spec);
+        }
+    }
+    read_manager(manager)
+        .start_only(&ids)
+        .map_err(|error| error.to_string())
+}
+
+/// Stops every managed service. Shared with the tray menu.
+pub(crate) fn stop_all_sync(manager: &RwLock<ProcessManager>) -> Result<(), String> {
+    read_manager(manager)
+        .stop_all()
+        .map_err(|error| error.to_string())
+}
+
 #[tauri::command]
 pub fn get_config(state: State<'_, AppState>) -> ConfigResponse {
     let config = lock_config(&state.config).clone();
@@ -164,10 +193,15 @@ pub fn get_config(state: State<'_, AppState>) -> ConfigResponse {
 }
 
 #[tauri::command]
-pub fn save_config(config: AppConfig, state: State<'_, AppState>) -> Result<(), String> {
+pub fn save_config(
+    config: AppConfig,
+    state: State<'_, AppState>,
+    app: tauri::AppHandle,
+) -> Result<(), String> {
     config.validate().map_err(map_config_error)?;
     config::save_to(&state.config_path, &config).map_err(map_config_error)?;
     *lock_config(&state.config) = config;
+    crate::tray::refresh_texts(&app);
     Ok(())
 }
 
@@ -303,26 +337,13 @@ pub async fn restart_service(id: String, state: State<'_, AppState>) -> Result<(
 pub async fn start_all_services(state: State<'_, AppState>) -> Result<(), String> {
     let manager = Arc::clone(&state.manager);
     let config = Arc::clone(&state.config);
-    run_blocking(move || {
-        let specs = enabled_specs(&lock_config(&config));
-        let ids: Vec<String> = specs.iter().map(|spec| spec.id.clone()).collect();
-        {
-            let mut manager = write_manager(&manager);
-            for spec in specs {
-                let _ = manager.register_or_update(spec);
-            }
-        }
-        read_manager(&manager)
-            .start_only(&ids)
-            .map_err(|error| error.to_string())
-    })
-    .await
+    run_blocking(move || start_all_sync(&manager, &config)).await
 }
 
 #[tauri::command]
 pub async fn stop_all_services(state: State<'_, AppState>) -> Result<(), String> {
     let manager = Arc::clone(&state.manager);
-    run_blocking(move || read_manager(&manager).stop_all().map_err(|error| error.to_string())).await
+    run_blocking(move || stop_all_sync(&manager)).await
 }
 
 #[cfg(test)]

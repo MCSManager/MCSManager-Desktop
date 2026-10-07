@@ -2,6 +2,9 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
+![MCSManager Desktop](docs/page-1.jpg)
+![MCSManager Desktop](docs/page-2.jpg)
+
 A Windows desktop shell for running [MCSManager](https://github.com/MCSManager/MCSManager) locally.
 It starts and stops your MCSManager daemon and panel as child processes, streams their live
 console output, and embeds the panel web UI in a tabbed window. Built with Tauri v2 (Rust)

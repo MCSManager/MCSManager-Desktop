@@ -69,5 +69,15 @@
   "portConflict.cancel": "取消",
   "error.startFailed": "启动服务失败",
   "error.saveFailed": "保存设置失败",
-  "error.notConfigured": "尚未配置"
+  "error.notConfigured": "尚未配置",
+  "tray.openPanel": "在浏览器中打开面板",
+  "tray.showWindow": "显示主窗口",
+  "tray.exit": "退出",
+  "tray.statusLine": "{service}：{state}",
+  "tray.confirm.title": "请确认",
+  "tray.confirm.startAll": "确定要启动全部服务吗？",
+  "tray.confirm.stopAll": "确定要停止全部服务吗？",
+  "tray.confirm.exit": "确定要退出应用吗？所有服务将会停止。",
+  "tray.confirm.cancel": "取消",
+  "tray.error.title": "操作失败"
 }

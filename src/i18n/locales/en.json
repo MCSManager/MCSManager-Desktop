@@ -69,5 +69,15 @@
   "portConflict.cancel": "Cancel",
   "error.startFailed": "Failed to start service",
   "error.saveFailed": "Failed to save settings",
-  "error.notConfigured": "Not configured yet"
+  "error.notConfigured": "Not configured yet",
+  "tray.openPanel": "Open panel in browser",
+  "tray.showWindow": "Show main window",
+  "tray.exit": "Exit",
+  "tray.statusLine": "{service}: {state}",
+  "tray.confirm.title": "Please confirm",
+  "tray.confirm.startAll": "Start all services?",
+  "tray.confirm.stopAll": "Stop all services?",
+  "tray.confirm.exit": "Exit the application? All services will be stopped.",
+  "tray.confirm.cancel": "Cancel",
+  "tray.error.title": "Operation failed"
 }
