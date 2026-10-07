@@ -21,13 +21,13 @@ old icon unless you force it.
 
 ## Quick Reference
 
-| Goal | Command (run from repo root) |
-| --- | --- |
-| Regenerate icons from source | `npx tauri icon "path\to\source.svg"` |
-| Drop mobile-only output (Windows app) | `Remove-Item -Recurse -Force src-tauri\icons\android, src-tauri\icons\ios` |
-| Force the exe to re-embed the icon | `cargo clean --release --manifest-path src-tauri/Cargo.toml -p mcsmanager-desktop` |
-| Rebuild exe + installers | `npm run tauri build` |
-| List changed icons | `git status --short src-tauri/icons` |
+| Goal                                  | Command (run from repo root)                                                       |
+| ------------------------------------- | ---------------------------------------------------------------------------------- |
+| Regenerate icons from source          | `npx tauri icon "path\to\source.svg"`                                              |
+| Drop mobile-only output (Windows app) | `Remove-Item -Recurse -Force src-tauri\icons\android, src-tauri\icons\ios`         |
+| Force the exe to re-embed the icon    | `cargo clean --release --manifest-path src-tauri/Cargo.toml -p mcsmanager-desktop` |
+| Rebuild exe + installers              | `npm run tauri build`                                                              |
+| List changed icons                    | `git status --short src-tauri/icons`                                               |
 
 ## Steps
 
@@ -81,12 +81,12 @@ there is no explicit `.icon()` call to update in `src-tauri/src/lib.rs`.
 
 ## Common Mistakes
 
-| Mistake | Why it hurts | Fix |
-| --- | --- | --- |
-| Editing `bundle.icon` or PNGs by hand | Wrong sizes/format; installers reject or render blurry | Run `npx tauri icon` and commit the generated set |
-| Rebuilding without cleaning | Build script doesn't track icons, so exe/taskbar keep the old image | `cargo clean --release -p mcsmanager-desktop` before `npm run tauri build` |
-| Committing `android/` and `ios/` output | Dead weight in a Windows-only repo | Delete both folders after generating |
-| Non-square source | The image is squashed into square icons | Use a square `viewBox` / a 1024x1024 source |
-| Forgetting the installers | Wizard/Add-Remove icon comes from the same `icon.ico` | Rebuild the bundles too (`npm run tauri build`) |
-| Expecting `index.html`'s `/vite.svg` favicon to change the app icon | The OS icon is the window/bundle icon, not a webview favicon | The favicon is unrelated; replace it separately only if you want to |
-| Icon still looks old in Explorer | Windows icon cache, not a build failure | Refresh with `ie4uinit.exe -show`, or restart Explorer |
+| Mistake                                                             | Why it hurts                                                        | Fix                                                                        |
+| ------------------------------------------------------------------- | ------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| Editing `bundle.icon` or PNGs by hand                               | Wrong sizes/format; installers reject or render blurry              | Run `npx tauri icon` and commit the generated set                          |
+| Rebuilding without cleaning                                         | Build script doesn't track icons, so exe/taskbar keep the old image | `cargo clean --release -p mcsmanager-desktop` before `npm run tauri build` |
+| Committing `android/` and `ios/` output                             | Dead weight in a Windows-only repo                                  | Delete both folders after generating                                       |
+| Non-square source                                                   | The image is squashed into square icons                             | Use a square `viewBox` / a 1024x1024 source                                |
+| Forgetting the installers                                           | Wizard/Add-Remove icon comes from the same `icon.ico`               | Rebuild the bundles too (`npm run tauri build`)                            |
+| Expecting `index.html`'s `/vite.svg` favicon to change the app icon | The OS icon is the window/bundle icon, not a webview favicon        | The favicon is unrelated; replace it separately only if you want to        |
+| Icon still looks old in Explorer                                    | Windows icon cache, not a build failure                             | Refresh with `ie4uinit.exe -show`, or restart Explorer                     |

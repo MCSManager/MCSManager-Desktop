@@ -40,7 +40,6 @@ export function TopBar({
         ) : null}
       </div>
       <div className="topbar-actions">
-
         {hasActiveServices ? (
           <button
             type="button"
